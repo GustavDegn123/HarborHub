@@ -1,33 +1,38 @@
-// App.js
 import React, { useEffect, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { onAuthStateChanged } from "firebase/auth";
-import { ActivityIndicator, View } from "react-native";
 
-import { auth } from "./firebase"; // vores firebase config
+import HomeScreen from "./components/HomeScreen";
 import LoginScreen from "./components/LoginScreen";
 import SignUpScreen from "./components/SignUpScreen";
-import HomeScreen from "./components/HomeScreen";
+import StartTakingJobs from "./components/StartTakingJobs";
+import ChooseWorkScreen from "./components/ChooseWorkScreen";
+import JobsFeedScreen from "./components/JobsFeedScreen";
+
+// MapPicker via require for at undgå import-cache issues
+const MapPickerScreen = require("./components/MapPickerScreen").default;
+
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "./firebase";
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
 
+  // Lyt til Firebase auth state
   useEffect(() => {
-    // Lyt til login-status
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser ?? null);
+      setInitializing(false);
     });
-
-    return unsubscribe; // rydder op i listener når komponent unmountes
+    return unsubscribe;
   }, []);
 
-  if (loading) {
-    // Loader state mens vi tjekker login-status
+  // Loader mens vi venter på Firebase
+  if (initializing) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#007bff" />
@@ -37,15 +42,47 @@ export default function App() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={{ headerShadowVisible: false }}>
         {user ? (
-          // Hvis bruger er logget ind → send til Home
-          <Stack.Screen name="Home" component={HomeScreen} />
-        ) : (
-          // Ellers → Login/Signup flow
           <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="SignUp" component={SignUpScreen} />
+            <Stack.Screen
+              name="Home"
+              component={HomeScreen}
+              options={{ title: "HarborHub" }}
+            />
+            <Stack.Screen
+              name="StartTakingJobs"
+              component={StartTakingJobs}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="ChooseWork"
+              component={ChooseWorkScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="JobsFeed"
+              component={JobsFeedScreen}
+              options={{ title: "Tilgængelige opgaver" }}
+            />
+            <Stack.Screen
+              name="MapPicker"
+              component={MapPickerScreen}
+              options={{ title: "Vælg placering" }}
+            />
+          </>
+        ) : (
+          <>
+            <Stack.Screen
+              name="Login"
+              component={LoginScreen}
+              options={{ title: "Log ind" }}
+            />
+            <Stack.Screen
+              name="SignUp"
+              component={SignUpScreen}
+              options={{ title: "Opret konto" }}
+            />
           </>
         )}
       </Stack.Navigator>
