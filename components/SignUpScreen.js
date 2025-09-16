@@ -17,7 +17,6 @@ const SignUpScreen = ({ navigation }) => {
     try {
       const user = await signUpUser(email, password, name, role, phone, location);
       Alert.alert("Success", `User ${user.email} created as ${role}!`);
-      navigation.replace("Home");
     } catch (error) {
       console.error(error);
       Alert.alert("Error", error.message);

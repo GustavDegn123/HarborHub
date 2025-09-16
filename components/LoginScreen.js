@@ -34,7 +34,6 @@ const LoginScreen = ({ navigation }) => {
       firebaseGoogleLogin(id_token)
         .then((user) => {
           Alert.alert("Google login", `✅ Velkommen ${user.email}`);
-          navigation.replace("Home");
         })
         .catch((err) => Alert.alert("Google login fejl", err.message));
     }
@@ -44,7 +43,6 @@ const LoginScreen = ({ navigation }) => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       Alert.alert("Success", "✅ Du er logget ind!");
-      navigation.replace("Home");
     } catch (error) {
       console.error(error);
       Alert.alert("Login Error", error.message);

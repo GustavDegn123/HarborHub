@@ -3,18 +3,19 @@ import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import HomeScreen from "./components/HomeScreen";
+import HomeScreen from "./components/HomeScreen"; // Provider home
+import OwnerHomeScreen from "./components/OwnerHomeScreen"; // Owner home
 import LoginScreen from "./components/LoginScreen";
 import SignUpScreen from "./components/SignUpScreen";
 import StartTakingJobs from "./components/StartTakingJobs";
 import ChooseWorkScreen from "./components/ChooseWorkScreen";
 import JobsFeedScreen from "./components/JobsFeedScreen";
 
-// MapPicker via require for at undgå import-cache issues
 const MapPickerScreen = require("./components/MapPickerScreen").default;
 
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
+import { getUserRole } from "./services/authService";
 
 const Stack = createNativeStackNavigator();
 
@@ -22,16 +23,24 @@ export default function App() {
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState(null);
 
-  // Lyt til Firebase auth state
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser ?? null);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const role = await getUserRole(firebaseUser.uid);
+          setUser({ ...firebaseUser, role });
+        } catch (err) {
+          console.error("Fejl ved hentning af rolle:", err);
+          setUser({ ...firebaseUser, role: null });
+        }
+      } else {
+        setUser(null);
+      }
       setInitializing(false);
     });
     return unsubscribe;
   }, []);
 
-  // Loader mens vi venter på Firebase
   if (initializing) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -44,34 +53,52 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShadowVisible: false }}>
         {user ? (
-          <>
-            <Stack.Screen
-              name="Home"
-              component={HomeScreen}
-              options={{ title: "HarborHub" }}
-            />
-            <Stack.Screen
-              name="StartTakingJobs"
-              component={StartTakingJobs}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="ChooseWork"
-              component={ChooseWorkScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="JobsFeed"
-              component={JobsFeedScreen}
-              options={{ title: "Tilgængelige opgaver" }}
-            />
-            <Stack.Screen
-              name="MapPicker"
-              component={MapPickerScreen}
-              options={{ title: "Vælg placering" }}
-            />
-          </>
+          user.role === "owner" ? (
+            // --- OWNER STACK ---
+            <>
+              <Stack.Screen
+                name="OwnerHome"
+                component={OwnerHomeScreen}
+                options={{ title: "Mine både" }}
+              />
+              <Stack.Screen
+                name="MapPicker"
+                component={MapPickerScreen}
+                options={{ title: "Vælg placering" }}
+              />
+            </>
+          ) : (
+            // --- PROVIDER STACK ---
+            <>
+              <Stack.Screen
+                name="Home"
+                component={HomeScreen}
+                options={{ title: "HarborHub" }}
+              />
+              <Stack.Screen
+                name="StartTakingJobs"
+                component={StartTakingJobs}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="ChooseWork"
+                component={ChooseWorkScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="JobsFeed"
+                component={JobsFeedScreen}
+                options={{ title: "Tilgængelige opgaver" }}
+              />
+              <Stack.Screen
+                name="MapPicker"
+                component={MapPickerScreen}
+                options={{ title: "Vælg placering" }}
+              />
+            </>
+          )
         ) : (
+          // --- AUTH STACK ---
           <>
             <Stack.Screen
               name="Login"
