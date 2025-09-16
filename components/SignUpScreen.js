@@ -1,13 +1,16 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Alert } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { signUpUser } from "../services/authService";
+
+// styles
+import styles from "../styles/signUpStyles";
 
 const SignUpScreen = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState("owner"); // default = owner
+  const [role, setRole] = useState("owner");
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
 
@@ -64,7 +67,6 @@ const SignUpScreen = ({ navigation }) => {
         onChangeText={setLocation}
       />
 
-      {/* Rolle - dropdown */}
       <View style={styles.pickerContainer}>
         <Picker selectedValue={role} onValueChange={(itemValue) => setRole(itemValue)}>
           <Picker.Item label="Owner" value="owner" />
@@ -84,13 +86,3 @@ const SignUpScreen = ({ navigation }) => {
 };
 
 export default SignUpScreen;
-
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "#fff" },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 20, textAlign: "center" },
-  input: { borderWidth: 1, borderColor: "#ccc", padding: 12, marginBottom: 12, borderRadius: 8 },
-  pickerContainer: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, marginBottom: 12 },
-  button: { backgroundColor: "#007bff", padding: 15, borderRadius: 8, alignItems: "center" },
-  buttonText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
-  link: { color: "#007bff", textAlign: "center", marginTop: 15 },
-});
