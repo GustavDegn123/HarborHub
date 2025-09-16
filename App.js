@@ -11,6 +11,8 @@ import StartTakingJobs from "./components/StartTakingJobs";
 import ChooseWorkScreen from "./components/ChooseWorkScreen";
 import JobsFeedScreen from "./components/JobsFeedScreen";
 import BoatFormScreen from "./components/BoatFormScreen";
+import RequestsScreen from "./components/RequestsScreen";
+import NewRequestScreen from "./components/NewRequestScreen";
 
 const MapPickerScreen = require("./components/MapPickerScreen").default;
 
@@ -67,6 +69,16 @@ export default function App() {
                 name="MapPicker"
                 component={MapPickerScreen}
                 options={{ title: "Vælg placering" }}
+              />
+              <Stack.Screen
+                name="Requests"
+                component={RequestsScreen}
+                options={{ title: "Mine service requests" }}
+              />
+              <Stack.Screen
+                name="NewRequest"
+                component={NewRequestScreen}
+                options={{ title: "Opret ny opgave" }}
               />
             </>
           ) : (
