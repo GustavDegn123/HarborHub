@@ -12,18 +12,21 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
-/** Helper: opret subprofil i owners/providers hvis den ikke findes */
+/**
+ * Helper: Sørger for at subprofilen (owners/providers) findes.
+ * Laves kun hvis den mangler.
+ */
 async function ensureSubProfile(uid, role) {
   if (role !== "owner" && role !== "provider") return;
 
   const col = role === "owner" ? "owners" : "providers";
   const ref = doc(db, col, uid);
   const snap = await getDoc(ref);
-  if (snap.exists()) return;
+  if (snap.exists()) return; // allerede oprettet
 
   if (role === "owner") {
     await setDoc(ref, {
-      boats: [],
+      boats: [], // tom liste til at starte med
       preferred_harbor: null,
       created_at: serverTimestamp(),
     });
@@ -32,13 +35,17 @@ async function ensureSubProfile(uid, role) {
       company_name: null,
       vat_number: null,
       service_area: null,
-      services: [],
+      services: [], // fx ["motorservice", "vinteropbevaring"]
+      active: false,
       created_at: serverTimestamp(),
     });
   }
 }
 
-/** Opret bruger med email/password + base user doc + subprofil */
+/**
+ * Opret bruger med email/password
+ * Gemmer i `users` og opretter subprofil i `owners` eller `providers`.
+ */
 export async function signUpUser(email, password, name, role, phone, location) {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   const user = cred.user;
@@ -54,34 +61,35 @@ export async function signUpUser(email, password, name, role, phone, location) {
     updated_at: serverTimestamp(),
   };
 
-  // Base user
+  // Gem i superklasse
   await setDoc(doc(db, "users", user.uid), userData);
-  // Subprofil
+  // Sørg for subprofil
   await ensureSubProfile(user.uid, role);
 
-  // Returner data der matcher din SignUpScreen (den bruger .email i alert)
-  return userData;
+  return userData; // så din SignUpScreen kan bruge .email fx
 }
 
-/** Login med Google id_token (fra Expo AuthSession) */
+/**
+ * Login med Google (Expo AuthSession giver et id_token)
+ */
 export async function firebaseGoogleLogin(idToken) {
   const credential = GoogleAuthProvider.credential(idToken);
-  const result = await signInWithCredential(auth, credential); // auth-user
+  const result = await signInWithCredential(auth, credential);
+  const user = result.user;
+  const uid = user.uid;
 
-  const uid = result.user.uid;
   const userRef = doc(db, "users", uid);
   const userSnap = await getDoc(userRef);
 
   if (!userSnap.exists()) {
-    // Førstegangs Google-login: vælg en fornuftig default rolle.
-    // Du kan ændre denne default til "owner" hvis du foretrækker det.
+    // Default rolle til nye Google-logins
     const defaultRole = "provider";
 
     await setDoc(userRef, {
       user_id: uid,
-      name: result.user.displayName || null,
-      email: result.user.email || null,
-      phone: result.user.phoneNumber || null,
+      name: user.displayName || null,
+      email: user.email || null,
+      phone: user.phoneNumber || null,
       role: defaultRole,
       location: null,
       created_at: serverTimestamp(),
@@ -91,17 +99,20 @@ export async function firebaseGoogleLogin(idToken) {
     await ensureSubProfile(uid, defaultRole);
   }
 
-  // behold return-format så din LoginScreen stadig kan sige user.email
-  return result.user;
+  return user; // så LoginScreen stadig kan sige user.email
 }
 
-/** Hent rolle til navigation */
+/**
+ * Hent brugerens rolle fra `users/{uid}`
+ */
 export async function getUserRole(uid) {
   const snap = await getDoc(doc(db, "users", uid));
   return snap.exists() ? snap.data().role : null;
 }
 
-/** Skift rolle senere (valgfrit) */
+/**
+ * Opdater brugerens rolle (fx hvis du vil give mulighed for at skifte)
+ */
 export async function updateUserRole(uid, nextRole) {
   await setDoc(
     doc(db, "users", uid),

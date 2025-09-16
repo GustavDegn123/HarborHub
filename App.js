@@ -10,6 +10,7 @@ import SignUpScreen from "./components/SignUpScreen";
 import StartTakingJobs from "./components/StartTakingJobs";
 import ChooseWorkScreen from "./components/ChooseWorkScreen";
 import JobsFeedScreen from "./components/JobsFeedScreen";
+import BoatFormScreen from "./components/BoatFormScreen";
 
 const MapPickerScreen = require("./components/MapPickerScreen").default;
 
@@ -61,6 +62,7 @@ export default function App() {
                 component={OwnerHomeScreen}
                 options={{ title: "Mine både" }}
               />
+              <Stack.Screen name="BoatForm" component={BoatFormScreen} options={{ title: "Tilføj båd" }} />
               <Stack.Screen
                 name="MapPicker"
                 component={MapPickerScreen}
