@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 import { signUpUser } from "../services/authService";
 
 // styles
@@ -10,7 +9,7 @@ const SignUpScreen = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState("owner");
+  const [role, setRole] = useState("owner"); // default = owner
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
 
@@ -67,11 +66,26 @@ const SignUpScreen = ({ navigation }) => {
         onChangeText={setLocation}
       />
 
-      <View style={styles.pickerContainer}>
-        <Picker selectedValue={role} onValueChange={(itemValue) => setRole(itemValue)}>
-          <Picker.Item label="Owner" value="owner" />
-          <Picker.Item label="Provider" value="provider" />
-        </Picker>
+      {/* Role Selection */}
+      <Text style={styles.label}>Choose your role:</Text>
+      <View style={styles.roleContainer}>
+        <TouchableOpacity
+          style={[styles.roleButton, role === "owner" && styles.roleButtonActive]}
+          onPress={() => setRole("owner")}
+        >
+          <Text style={[styles.roleText, role === "owner" && styles.roleTextActive]}>
+            Boat Owner
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.roleButton, role === "provider" && styles.roleButtonActive]}
+          onPress={() => setRole("provider")}
+        >
+          <Text style={[styles.roleText, role === "provider" && styles.roleTextActive]}>
+            Provider / Mechanic
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.button} onPress={handleSignUp}>
