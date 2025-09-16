@@ -8,9 +8,7 @@ const LoginScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       {/* Logo */}
-      <Text style={styles.logo}>HarborHub</Text>
-      {/* Hvis du har et logo-billede */}
-      {/* <Image source={require("../assets/logo.png")} style={styles.logoImage} /> */}
+      <Image source={require("../assets/logo.png")} style={styles.logoImage} />
 
       {/* Apple Login */}
       <TouchableOpacity style={[styles.socialButton, styles.appleButton]}>
@@ -19,12 +17,18 @@ const LoginScreen = ({ navigation }) => {
 
       {/* Facebook Login */}
       <TouchableOpacity style={[styles.socialButton, styles.facebookButton]}>
-        <Text style={styles.socialText}>Facebook</Text>
+        <View style={styles.socialContent}>
+          <Image source={require("../assets/facebook.png")} style={styles.icon} />
+          <Text style={styles.socialText}>Facebook</Text>
+        </View>
       </TouchableOpacity>
 
       {/* Google Login */}
       <TouchableOpacity style={[styles.socialButton, styles.googleButton]}>
-        <Text style={styles.socialText}>Google</Text>
+        <View style={styles.socialContent}>
+          <Image source={require("../assets/google.png")} style={styles.icon} />
+          <Text style={[styles.socialText, { color: "#333" }]}>Google</Text>
+        </View>
       </TouchableOpacity>
 
       {/* Divider */}
@@ -80,16 +84,9 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: "#fff",
   },
-  logo: {
-    fontSize: 36,
-    fontWeight: "bold",
-    color: "#007bff",
-    textAlign: "center",
-    marginBottom: 40,
-  },
   logoImage: {
-    width: 180,
-    height: 80,
+    width: 160,
+    height: 160,
     resizeMode: "contain",
     alignSelf: "center",
     marginBottom: 30,
@@ -110,6 +107,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#ccc",
+  },
+  socialContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  icon: {
+    width: 20,
+    height: 20,
+    resizeMode: "contain",
+    marginRight: 8,
   },
   appleText: {
     color: "#fff",
