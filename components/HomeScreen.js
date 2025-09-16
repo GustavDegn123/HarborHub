@@ -1,8 +1,8 @@
 // components/HomeScreen.js
-import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
+import React from "react";
 
 const HomeScreen = () => {
   const handleLogout = async () => {
