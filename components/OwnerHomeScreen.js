@@ -39,6 +39,22 @@ export default function OwnerHomeScreen({ navigation }) {
         <Text style={styles.buttonText}>Se mine service requests</Text>
       </TouchableOpacity>
 
+      {/* Ny opgave */}
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => navigation.navigate("NewRequest")}
+      >
+        <Text style={styles.buttonText}>Opret ny opgave</Text>
+      </TouchableOpacity>
+
+      {/* Personlige detaljer (profil) */}
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => navigation.navigate("BoatProfile")}
+      >
+        <Text style={styles.buttonText}>Gå til personlige detaljer</Text>
+      </TouchableOpacity>
+
       {/* Log ud */}
       <TouchableOpacity
         style={[styles.button, { backgroundColor: "#a94442" }]}

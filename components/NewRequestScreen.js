@@ -6,21 +6,32 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
+import Checkbox from "expo-checkbox";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { auth, db } from "../firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, Timestamp } from "firebase/firestore";
 import { addRequest } from "../services/requestsService";
+import styles from "../styles/newRequestStyles";
 
 export default function NewRequestScreen({ navigation }) {
   const [boats, setBoats] = useState([]);
   const [boatId, setBoatId] = useState("");
   const [serviceType, setServiceType] = useState("bundmaling");
   const [description, setDescription] = useState("");
+
+  const [selectedOption, setSelectedOption] = useState("Fleksibel");
+  const [isSpecificTime, setIsSpecificTime] = useState(false);
+  const [selectedTime, setSelectedTime] = useState("");
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
   const [loading, setLoading] = useState(true);
 
+  // Hent både fra Firestore
   useEffect(() => {
     const loadBoats = async () => {
       try {
@@ -38,6 +49,13 @@ export default function NewRequestScreen({ navigation }) {
     loadBoats();
   }, []);
 
+  const onChangeDate = (event, selectedDate) => {
+    const currentDate = selectedDate || date;
+    setShowDatePicker(Platform.OS === "ios");
+    setDate(currentDate);
+  };
+
+  // Gem request
   const handleSave = async () => {
     if (!boatId) {
       Alert.alert("Fejl", "Vælg en båd først.");
@@ -48,8 +66,12 @@ export default function NewRequestScreen({ navigation }) {
       await addRequest(ownerId, boatId, {
         service_type: serviceType,
         description,
+        option: selectedOption,
+        date: Timestamp.fromDate(date),
+        specificTime: isSpecificTime ? selectedTime : null,
+        status: "open",
       });
-      Alert.alert("Success", "Opgave oprettet!");
+      Alert.alert("Succes", "Opgave oprettet!");
       navigation.goBack();
     } catch (err) {
       console.error("Fejl ved oprettelse af request:", err);
@@ -67,61 +89,151 @@ export default function NewRequestScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Opret ny serviceopgave</Text>
+      <Text style={styles.header}>Opret ny serviceopgave</Text>
 
-      <Text>Vælg båd:</Text>
-      <Picker selectedValue={boatId} onValueChange={(val) => setBoatId(val)}>
-        <Picker.Item label="-- Vælg båd --" value="" />
-        {boats.map((b) => (
-          <Picker.Item key={b.id} label={b.name} value={b.id} />
-        ))}
-      </Picker>
-
-      <Text>Service type:</Text>
-      <Picker
-        selectedValue={serviceType}
-        onValueChange={(val) => setServiceType(val)}
+      {/* --- Vælg båd --- */}
+<Text style={styles.label}>Vælg båd:</Text>
+<View style={styles.buttonGrid}>
+  {boats.map((b) => (
+    <TouchableOpacity
+      key={b.id}
+      style={[
+        styles.selectButton,
+        boatId === b.id && styles.selectButtonSelected,
+      ]}
+      onPress={() => setBoatId(b.id)}
+    >
+      <Text
+        style={[
+          styles.selectButtonText,
+          boatId === b.id && styles.selectButtonTextSelected,
+        ]}
       >
-        <Picker.Item label="Bundmaling" value="bundmaling" />
-        <Picker.Item label="Vinteropbevaring" value="vinteropbevaring" />
-        <Picker.Item label="Reparation" value="reparation" />
-        <Picker.Item label="Elarbejde" value="elarbejde" />
-        <Picker.Item label="Riggerservice" value="riggerservice" />
-        <Picker.Item label="Polering" value="polering" />
-      </Picker>
+        {b.name}
+      </Text>
+    </TouchableOpacity>
+  ))}
+</View>
 
+{/* --- Service type --- */}
+<Text style={styles.label}>Service type:</Text>
+<View style={styles.buttonGrid}>
+  {[
+    "Bundmaling",
+    "Vinteropbevaring",
+    "Reparation",
+    "Elarbejde",
+    "Riggerservice",
+    "Polering",
+  ].map((type) => (
+    <TouchableOpacity
+      key={type}
+      style={[
+        styles.selectButton,
+        serviceType === type.toLowerCase() && styles.selectButtonSelected,
+      ]}
+      onPress={() => setServiceType(type.toLowerCase())}
+    >
+      <Text
+        style={[
+          styles.selectButtonText,
+          serviceType === type.toLowerCase() && styles.selectButtonTextSelected,
+        ]}
+      >
+        {type}
+      </Text>
+    </TouchableOpacity>
+  ))}
+</View>
+
+
+      {/* --- Hvornår --- */}
+      <Text style={styles.label}>Hvornår skal det ordnes?</Text>
+      <View style={styles.optionRow}>
+        {["På Dato", "Før Dato", "Fleksibel"].map((option) => (
+          <TouchableOpacity
+            key={option}
+            style={[
+              styles.optionButton,
+              selectedOption === option && styles.optionButtonSelected,
+            ]}
+            onPress={() => {
+              setSelectedOption(option);
+              if (option === "På Dato" || option === "Før Dato") {
+                setShowDatePicker(true);
+              }
+            }}
+          >
+            <Text
+              style={[
+                styles.optionText,
+                selectedOption === option && styles.optionTextSelected,
+              ]}
+            >
+              {option}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {showDatePicker && (
+        <DateTimePicker value={date} mode="date" display="default" onChange={onChangeDate} />
+      )}
+
+      {selectedOption !== "Fleksibel" && (
+        <Text style={{ marginTop: 10, fontWeight: "600" }}>
+          {selectedOption === "Før Dato" ? "Senest: " : "Dato: "}
+          {date.toLocaleDateString()}
+        </Text>
+      )}
+
+      {/* --- Specifikt tidsrum --- */}
+      <View style={styles.checkboxContainer}>
+        <Checkbox
+          value={isSpecificTime}
+          onValueChange={setIsSpecificTime}
+          color={isSpecificTime ? "#1f5c7d" : undefined}
+          style={{ marginRight: 8 }}
+        />
+        <Text style={styles.checkboxLabel}>Det skal være et specifikt tidsrum</Text>
+      </View>
+
+      {isSpecificTime && (
+        <View style={styles.timeRow}>
+          {[
+            { label: "Morgen", sub: "Før 10" },
+            { label: "Middag", sub: "10-14" },
+            { label: "Eftermiddag", sub: "14-18" },
+            { label: "Aften", sub: "Efter 18" },
+          ].map((t) => (
+            <TouchableOpacity
+              key={t.label}
+              style={[
+                styles.timeButton,
+                selectedTime === t.label && styles.timeButtonSelected,
+              ]}
+              onPress={() => setSelectedTime(t.label)}
+            >
+              <Text style={styles.timeLabel}>{t.label}</Text>
+              <Text style={styles.timeSub}>{t.sub}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* --- Beskrivelse --- */}
       <TextInput
         style={styles.input}
-        placeholder="Beskrivelse"
+        placeholder="Beskriv opgaven"
         value={description}
         onChangeText={setDescription}
         multiline
       />
 
-      <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-        <Text style={styles.saveBtnText}>Gem opgave</Text>
+      {/* --- Gem --- */}
+      <TouchableOpacity style={styles.submitButton} onPress={handleSave}>
+        <Text style={styles.submitButtonText}>Gem opgave</Text>
       </TouchableOpacity>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  title: { fontSize: 20, fontWeight: "700", marginBottom: 16 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 12,
-  },
-  saveBtn: {
-    backgroundColor: "#1f5c7d",
-    padding: 16,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 20,
-  },
-  saveBtnText: { color: "white", fontWeight: "700" },
-});

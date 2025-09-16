@@ -3,8 +3,8 @@ import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import HomeScreen from "./components/HomeScreen"; // Provider home
-import OwnerHomeScreen from "./components/OwnerHomeScreen"; // Owner home
+import HomeScreen from "./components/HomeScreen";
+import OwnerHomeScreen from "./components/OwnerHomeScreen";
 import LoginScreen from "./components/LoginScreen";
 import SignUpScreen from "./components/SignUpScreen";
 import StartTakingJobs from "./components/StartTakingJobs";
@@ -13,6 +13,7 @@ import JobsFeedScreen from "./components/JobsFeedScreen";
 import BoatFormScreen from "./components/BoatFormScreen";
 import RequestsScreen from "./components/RequestsScreen";
 import NewRequestScreen from "./components/NewRequestScreen";
+import BoatProfileScreen from "./components/BoatProfileScreen";
 
 const MapPickerScreen = require("./components/MapPickerScreen").default;
 
@@ -79,6 +80,11 @@ export default function App() {
                 name="NewRequest"
                 component={NewRequestScreen}
                 options={{ title: "Opret ny opgave" }}
+              />
+              <Stack.Screen
+                name="BoatProfile"
+                component={BoatProfileScreen}
+                options={{ title: "Min profil" }}
               />
             </>
           ) : (

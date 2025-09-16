@@ -53,13 +53,6 @@ export default function RequestsScreen({ navigation }) {
           </View>
         )}
       />
-
-      <TouchableOpacity
-        style={styles.newBtn}
-        onPress={() => navigation.navigate("NewRequest")}
-      >
-        <Text style={styles.newBtnText}>+ Opret ny opgave</Text>
-      </TouchableOpacity>
     </View>
   );
 }
