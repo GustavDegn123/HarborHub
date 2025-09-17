@@ -22,17 +22,16 @@ export async function addBoat(ownerId, boatData) {
   return docRef.id;
 }
 
-/** Hent alle både for en owner */
+/** Hent alle både for en ejer */
 export async function getBoats(ownerId) {
-  const boatsRef = collection(db, "owners", ownerId, "boats");
-  const snap = await getDocs(boatsRef);
+  const ref = collection(db, "owners", ownerId, "boats");
+  const snap = await getDocs(ref);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-/** Hent én båd */
-export async function getBoatById(ownerId, boatId) {
-  const ref = doc(db, "owners", ownerId, "boats", boatId);
-  const snap = await getDoc(ref);
+/** Hent en enkelt båd */
+export async function getBoat(ownerId, boatId) {
+  const snap = await getDoc(doc(db, "owners", ownerId, "boats", boatId));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 

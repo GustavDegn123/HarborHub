@@ -1,4 +1,3 @@
-// /services/requestsService.js
 import { db } from "../firebase";
 import {
   collection,
@@ -22,7 +21,8 @@ export async function addRequest(ownerId, boatId, data) {
     boat_id: boatId,
     service_type: data.service_type,
     description: data.description || "",
-    budget: data.budget || null, // 👈 Ny felt: budget
+    budget: data.budget || null,       // 💰 Budget
+    deadline: data.deadline || null,   // ⏰ Deadline eller "flexible"
     status: "open",
     created_at: serverTimestamp(),
     updated_at: serverTimestamp(),
@@ -53,7 +53,7 @@ export async function updateRequestStatus(requestId, status) {
   });
 }
 
-/** Opdater en service request med vilkårlige felter (fx budget, beskrivelse osv.) */
+/** Opdater en service request med vilkårlige felter */
 export async function updateServiceRequest(id, data) {
   return updateDoc(doc(db, "service_requests", id), {
     ...data,
@@ -61,7 +61,7 @@ export async function updateServiceRequest(id, data) {
   });
 }
 
-/** Hent alle åbne requests (engangsforespørgsel, fx til provider-feed) */
+/** Hent alle åbne requests */
 export async function getOpenRequests(max = 100) {
   const ref = collection(db, "service_requests");
   const q = query(ref, where("status", "==", "open"), limit(max));
@@ -88,4 +88,10 @@ export function listenOpenServiceRequests(callback, errorCallback) {
       if (errorCallback) errorCallback(error);
     }
   );
+}
+
+/** Hent provider-profil (fx geo, info osv.) */
+export async function getProvider(uid) {
+  const snap = await getDoc(doc(db, "providers", uid));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }

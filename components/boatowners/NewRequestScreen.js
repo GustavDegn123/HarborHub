@@ -27,6 +27,8 @@ export default function NewRequestScreen({ navigation }) {
   const [serviceType, setServiceType] = useState("bundmaling");
   const [description, setDescription] = useState("");
 
+  const [budget, setBudget] = useState(""); // 💰 Nyt felt
+
   const [selectedOption, setSelectedOption] = useState("Fleksibel");
   const [isSpecificTime, setIsSpecificTime] = useState(false);
   const [selectedTime, setSelectedTime] = useState("");
@@ -35,21 +37,21 @@ export default function NewRequestScreen({ navigation }) {
 
   const [loading, setLoading] = useState(true);
 
-  // Hent både via service
-  useEffect(() => {
-    const loadBoats = async () => {
-      try {
-        const ownerId = auth.currentUser.uid;
-        const data = await getBoats(ownerId);
-        setBoats(data);
-      } catch (err) {
-        console.error("Fejl ved hentning af både:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadBoats();
-  }, []);
+ // Hent både via service
+useEffect(() => {
+  const loadBoats = async () => {
+    try {
+      const ownerId = auth.currentUser.uid;
+      const data = await getBoats(ownerId); // 👈 nu henter vi korrekt
+      setBoats(data);
+    } catch (err) {
+      console.error("Fejl ved hentning af både:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  loadBoats();
+}, []);
 
   const onChangeDate = (event, selectedDate) => {
     const currentDate = selectedDate || date;
@@ -63,13 +65,22 @@ export default function NewRequestScreen({ navigation }) {
       Alert.alert("Fejl", "Vælg en båd først.");
       return;
     }
+    if (!budget) {
+      Alert.alert("Fejl", "Indtast et budget.");
+      return;
+    }
+
     try {
       const ownerId = auth.currentUser.uid;
       await addRequest(ownerId, boatId, {
         service_type: serviceType,
         description,
-        option: selectedOption,
-        date: Timestamp.fromDate(date),
+        budget: parseInt(budget, 10), // gem som tal
+        deadline:
+          selectedOption === "Fleksibel"
+            ? "flexible"
+            : Timestamp.fromDate(date), // fleksibel eller dato
+        deadlineType: selectedOption, // gem også typen (På Dato / Før Dato / Fleksibel)
         specificTime: isSpecificTime ? selectedTime : null,
         status: "open",
       });
@@ -149,6 +160,16 @@ export default function NewRequestScreen({ navigation }) {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* --- Budget 💰 --- */}
+      <Text style={styles.label}>Budget (DKK):</Text>
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        placeholder="Indtast budget"
+        value={budget}
+        onChangeText={setBudget}
+      />
 
       {/* --- Hvornår --- */}
       <Text style={styles.label}>Hvornår skal det ordnes?</Text>

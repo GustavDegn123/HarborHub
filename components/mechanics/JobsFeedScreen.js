@@ -10,9 +10,21 @@ import {
 import { getAuth } from "firebase/auth";
 import { Timestamp } from "firebase/firestore";
 import styles from "../../styles/mechanics/jobsFeedStyles";
-import { getProvider, listenOpenServiceRequests } from "../../services/serviceRequestsService";
+import { getProvider, listenOpenServiceRequests } from "../../services/requestsService";
+import { getBoat } from "../../services/boatsService"; // 👈 Hent båd-info
 
-// --- Helper: beregn afstand (km) ---
+// --- Helper: valuta ---
+function DKK(n) {
+  return typeof n === "number"
+    ? new Intl.NumberFormat("da-DK", {
+        style: "currency",
+        currency: "DKK",
+        maximumFractionDigits: 0,
+      }).format(n)
+    : "—";
+}
+
+// --- Helper: afstand (km) ---
 function haversineKm(a, b) {
   if (!a || !b) return null;
   const R = 6371;
@@ -48,8 +60,22 @@ export default function JobsFeedScreen({ navigation }) {
   // Live-lyt på service_requests
   useEffect(() => {
     const unsub = listenOpenServiceRequests(
-      (reqs) => {
-        setRequests(reqs);
+      async (reqs) => {
+        // 👇 Hent bådnavne for hver request
+        const enriched = await Promise.all(
+          reqs.map(async (r) => {
+            let boat = null;
+            if (r.boat_id) {
+              try {
+                boat = await getBoat(r.boat_id);
+              } catch (e) {
+                console.log("Kunne ikke hente båd:", e);
+              }
+            }
+            return { ...r, boat };
+          })
+        );
+        setRequests(enriched);
         setLoading(false);
       },
       (e) => {
@@ -79,8 +105,8 @@ export default function JobsFeedScreen({ navigation }) {
       if (a.distanceKm != null && b.distanceKm != null) return a.distanceKm - b.distanceKm;
       if (a.distanceKm != null) return -1;
       if (b.distanceKm != null) return 1;
-      const ta = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : 0;
-      const tb = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : 0;
+      const ta = a.created_at instanceof Timestamp ? a.created_at.toMillis() : 0;
+      const tb = b.created_at instanceof Timestamp ? b.created_at.toMillis() : 0;
       return tb - ta;
     });
 
@@ -93,44 +119,54 @@ export default function JobsFeedScreen({ navigation }) {
   }, []);
 
   const renderItem = ({ item }) => {
-    const when =
-      item.createdAt instanceof Timestamp
-        ? new Date(item.createdAt.toMillis()).toLocaleDateString("da-DK", {
-            day: "2-digit",
-            month: "short",
-          })
-        : "";
+    // Deadline tekst
+    let deadlineText = null;
+    if (item.deadline === "flexible") {
+      deadlineText = "Fleksibel";
+    } else if (item.deadline instanceof Timestamp) {
+      deadlineText = item.deadline.toDate().toLocaleDateString("da-DK");
+    }
 
     return (
-      <TouchableOpacity
-        style={styles.jobCard}
-        onPress={() => navigation.navigate("JobDetail", { jobId: item.id })}
-      >
-        <Text style={styles.jobTitle}>{item.service_type || "Serviceforespørgsel"}</Text>
+      <View style={styles.card}>
+        {/* Titel */}
+        <Text style={styles.cardTitle}>{item.service_type || "Serviceforespørgsel"}</Text>
 
+        {/* Budget */}
+        {item.budget ? <Text style={styles.cardBudget}>{DKK(item.budget)}</Text> : null}
+
+        {/* Beskrivelse */}
         {item.description ? (
-          <Text style={styles.jobDescription} numberOfLines={2}>
+          <Text style={styles.cardDesc} numberOfLines={2}>
             {item.description}
           </Text>
         ) : null}
 
-        <View style={styles.tagWrap}>
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>{item.service_type}</Text>
-          </View>
-        </View>
+        {/* Bådnavn */}
+        {item.boat?.name ? (
+          <Text style={styles.cardMeta}>Båd: {item.boat.name}</Text>
+        ) : null}
 
-        <View style={styles.jobMetaRow}>
-          <Text style={styles.jobDistance}>{when}</Text>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            {item.distanceKm != null ? (
-              <Text style={styles.jobDistance}>{item.distanceKm} km</Text>
-            ) : (
-              <Text style={styles.jobDistance}>Ukendt afstand</Text>
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
+        {/* Deadline */}
+        {deadlineText && (
+          <Text style={styles.cardMeta}>Deadline: {deadlineText}</Text>
+        )}
+
+        {/* Afstand */}
+        {item.distanceKm != null ? (
+          <Text style={styles.cardMeta}>{item.distanceKm} km væk</Text>
+        ) : (
+          <Text style={styles.cardMeta}>Ukendt afstand</Text>
+        )}
+
+        {/* Se detaljer */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate("JobDetail", { jobId: item.id })}
+          style={styles.btnPrimary}
+        >
+          <Text style={styles.btnPrimaryText}>Se detaljer</Text>
+        </TouchableOpacity>
+      </View>
     );
   };
 

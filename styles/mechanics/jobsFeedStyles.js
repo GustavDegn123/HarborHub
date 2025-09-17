@@ -36,11 +36,12 @@ export default StyleSheet.create({
     paddingVertical: 8,
   },
 
-  jobCard: {
-    padding: 14,
+  // --- Kort (kortvisning af job) ---
+  card: {
+    padding: 16,
     marginHorizontal: 16,
     marginVertical: 8,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "#e5e7eb",
     backgroundColor: "#fff",
@@ -50,40 +51,54 @@ export default StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-  jobTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 4,
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 6,
     color: "#0f1f2a",
   },
-  jobDescription: {
-    color: "#4b5563",
+  cardBudget: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1f5c7d",
     marginBottom: 6,
   },
-  jobMetaRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 8,
+  cardDesc: {
+    color: "#374151",
+    marginBottom: 6,
+    fontSize: 14,
+    lineHeight: 20,
   },
-  jobPrice: {
-    color: "#1f2937",
-    fontWeight: "700",
-  },
-  jobDistance: {
+  cardMeta: {
     color: "#6b7280",
-    fontWeight: "600",
+    fontSize: 13,
+    marginBottom: 4,
+  },
+
+  // --- Knappen nederst ---
+  btnPrimary: {
+    backgroundColor: "#1f5c7d",
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  btnPrimaryText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
   },
 
   // --- Tags (chips) ---
   tagWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: 8,
+    marginTop: 6,
+    marginBottom: 6,
   },
   tag: {
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 4,
     borderRadius: 999,
     backgroundColor: "#f2f8fc",
     borderWidth: 1,
