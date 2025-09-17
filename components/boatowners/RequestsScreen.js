@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, FlatList, ActivityIndicator } from "react-native";
-import { auth } from "../firebase";
-import { getRequestsByOwner } from "../services/requestsService";
+import { auth } from "../../firebase";
+import { getRequestsByOwner } from "../../services/requestsService";
 
 // styles
-import styles from "../styles/boatowners/requestsStyles";
+import styles from "../../styles/boatowners/requestsStyles";
 
 export default function RequestsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);

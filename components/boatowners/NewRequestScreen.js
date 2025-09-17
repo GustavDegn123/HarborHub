@@ -12,10 +12,10 @@ import {
 } from "react-native";
 import Checkbox from "expo-checkbox";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { auth, db } from "../firebase";
+import { auth, db } from "../../firebase";
 import { collection, getDocs, Timestamp } from "firebase/firestore";
-import { addRequest } from "../services/requestsService";
-import styles from "../styles/boatowners/newRequestStyles";
+import { addRequest } from "../../services/requestsService";
+import styles from "../../styles/boatowners/newRequestStyles";
 
 export default function NewRequestScreen({ navigation }) {
   const [boats, setBoats] = useState([]);

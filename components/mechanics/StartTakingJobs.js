@@ -14,10 +14,10 @@ import * as Location from "expo-location";
 import { geohashForLocation } from "geofire-common";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
-import { db } from "../firebase";
+import { db } from "../../firebase";
 
 // styles
-import styles from "../styles/mechanics/startTakingJobsStyles";
+import styles from "../../styles/mechanics/startTakingJobsStyles";
 
 export default function StartTakingJobs({ navigation, route }) {
   const auth = getAuth();

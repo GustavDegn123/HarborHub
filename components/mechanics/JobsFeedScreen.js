@@ -8,7 +8,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { getAuth } from "firebase/auth";
-import { db } from "../firebase";
+import { db } from "../../firebase";
 import {
   collection,
   doc,
@@ -19,7 +19,7 @@ import {
   limit,
 } from "firebase/firestore";
 import { distanceBetween } from "geofire-common";
-import styles from "../styles/mechanics/jobsFeedStyles";
+import styles from "../../styles/mechanics/jobsFeedStyles";
 
 const CHUNK_SIZE = 10;
 

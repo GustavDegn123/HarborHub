@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, ScrollView } from "react-native";
 import { getAuth } from "firebase/auth";
-import { db } from "../firebase";
+import { db } from "../../firebase";
 import { collection, doc, getDoc, getDocs, query, where, limit } from "firebase/firestore";
 
 // styles
-import styles from "../styles/mechanics/providerProfileStyles";
+import styles from "../../styles/mechanics/providerProfileStyles";
 
 const DKK = (n) =>
   typeof n === "number"

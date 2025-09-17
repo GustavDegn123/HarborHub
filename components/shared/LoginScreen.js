@@ -4,12 +4,12 @@ import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
-import { firebaseGoogleLogin } from "../services/authService";
+import { auth } from "../../firebase";
+import { firebaseGoogleLogin } from "../../services/authService";
 import Constants from "expo-constants";
 
 // styles
-import styles from "../styles/shared/loginStyles";
+import styles from "../../styles/shared/loginStyles";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -52,7 +52,7 @@ const LoginScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       {/* Logo */}
-      <Image source={require("../assets/logo.png")} style={styles.logoImage} />
+      <Image source={require("../../assets/logo.png")} style={styles.logoImage} />
 
       {/* Apple Login */}
       <TouchableOpacity style={[styles.socialButton, styles.appleButton]}>
@@ -62,7 +62,7 @@ const LoginScreen = ({ navigation }) => {
       {/* Facebook Login */}
       <TouchableOpacity style={[styles.socialButton, styles.facebookButton]}>
         <View style={styles.socialContent}>
-          <Image source={require("../assets/facebook.png")} style={styles.icon} />
+          <Image source={require("../../assets/facebook.png")} style={styles.icon} />
           <Text style={styles.socialText}>Facebook</Text>
         </View>
       </TouchableOpacity>
@@ -74,7 +74,7 @@ const LoginScreen = ({ navigation }) => {
         onPress={() => promptAsync()}
       >
         <View style={styles.socialContent}>
-          <Image source={require("../assets/google.png")} style={styles.icon} />
+          <Image source={require("../../assets/google.png")} style={styles.icon} />
           <Text style={[styles.socialText, { color: "#333" }]}>Google</Text>
         </View>
       </TouchableOpacity>

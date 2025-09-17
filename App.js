@@ -3,20 +3,19 @@ import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import ProviderHomeScreen from "./components/ProviderHomeScreen";
-import OwnerHomeScreen from "./components/OwnerHomeScreen";
-import LoginScreen from "./components/LoginScreen";
-import SignUpScreen from "./components/SignUpScreen";
-import StartTakingJobs from "./components/StartTakingJobs";
-import ChooseWorkScreen from "./components/ChooseWorkScreen";
-import JobsFeedScreen from "./components/JobsFeedScreen";
-import BoatFormScreen from "./components/BoatFormScreen";
-import RequestsScreen from "./components/RequestsScreen";
-import NewRequestScreen from "./components/NewRequestScreen";
-import BoatProfileScreen from "./components/BoatProfileScreen";
-import ProviderProfileScreen from "./components/ProviderProfileScreen";
-
-const MapPickerScreen = require("./components/MapPickerScreen").default;
+import ProviderHomeScreen from "./components/mechanics/ProviderHomeScreen";
+import OwnerHomeScreen from "./components/boatowners/OwnerHomeScreen";
+import LoginScreen from "./components/shared/LoginScreen";
+import SignUpScreen from "./components/shared/SignUpScreen";
+import StartTakingJobs from "./components/mechanics/StartTakingJobs";
+import ChooseWorkScreen from "./components/mechanics/ChooseWorkScreen";
+import JobsFeedScreen from "./components/mechanics/JobsFeedScreen";
+import BoatFormScreen from "./components/boatowners/BoatFormScreen";
+import RequestsScreen from "./components/boatowners/RequestsScreen";
+import NewRequestScreen from "./components/boatowners/NewRequestScreen";
+import BoatProfileScreen from "./components/boatowners/BoatProfileScreen";
+import ProviderProfileScreen from "./components/mechanics/ProviderProfileScreen";
+import MapPickerScreen from "./components/shared/MapPickerScreen";
 
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";

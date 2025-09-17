@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch } from "react-native";
-import { addBoat } from "../services/boatsService";
-import { auth } from "../firebase";
-import styles from "../styles/boatowners/boatFormStyles";
+import { addBoat } from "../../services/boatsService";
+import { auth } from "../../firebase";
+import styles from "../../styles/boatowners/boatFormStyles";
 
 export default function BoatFormScreen({ navigation }) {
   const [name, setName] = useState("");

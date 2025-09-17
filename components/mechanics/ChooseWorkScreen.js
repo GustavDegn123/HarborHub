@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, FlatList, ActivityIndicator, Alert } from "react-native";
 import { getAuth } from "firebase/auth";
-import { db } from "../firebase";
+import { db } from "../../firebase";
 import { collection, getDocs, doc, setDoc, serverTimestamp } from "firebase/firestore";
-import styles from "../styles/mechanics/chooseWorkStyles";
+import styles from "../../styles/mechanics/chooseWorkStyles";
 
 const FALLBACK_SERVICES = [
   { id: "motorservice", name: "Motorservice" },

@@ -4,7 +4,7 @@ import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
 
 // styles
-import styles from "../styles/shared/mapPickerStyles";
+import styles from "../../styles/shared/mapPickerStyles";
 
 export default function MapPickerScreen({ navigation, route }) {
   const start = route?.params?.start;

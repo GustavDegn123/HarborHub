@@ -1,8 +1,8 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { signOut } from "firebase/auth";
-import { auth } from "../firebase";
-import styles from "../styles/mechanics/providerHomeStyles";
+import { auth } from "../../firebase";
+import styles from "../../styles/mechanics/providerHomeStyles";
 
 export default function ProviderHomeScreen({ navigation }) {
   const handleLogout = async () => {

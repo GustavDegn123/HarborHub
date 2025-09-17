@@ -1,10 +1,10 @@
 import React from "react";
 import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { signOut } from "firebase/auth";
-import { auth } from "../firebase";
+import { auth } from "../../firebase";
 
 // styles
-import styles from "../styles/boatowners/ownerHomeStyles";
+import styles from "../../styles/boatowners/ownerHomeStyles";
 
 export default function OwnerHomeScreen({ navigation }) {
   const handleLogout = async () => {

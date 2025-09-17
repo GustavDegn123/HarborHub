@@ -1,9 +1,9 @@
 // components/ProfileScreen.js
 import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, ScrollView } from "react-native";
-import { auth, db } from "../firebase";
+import { auth, db } from "../../firebase";
 import { doc, getDoc } from "firebase/firestore";
-import styles from "../styles/boatowners/boatProfileStyles";
+import styles from "../../styles/boatowners/boatProfileStyles";
 
 export default function ProfileScreen() {
   const [userData, setUserData] = useState(null);
