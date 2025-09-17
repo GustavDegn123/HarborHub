@@ -8,7 +8,10 @@ import {
   getDocs,
   doc,
   updateDoc,
+  getDoc,
   serverTimestamp,
+  limit,
+  onSnapshot,
 } from "firebase/firestore";
 
 /** Opret en ny service request */
@@ -19,6 +22,7 @@ export async function addRequest(ownerId, boatId, data) {
     boat_id: boatId,
     service_type: data.service_type,
     description: data.description || "",
+    budget: data.budget || null, // 👈 Ny felt: budget
     status: "open",
     created_at: serverTimestamp(),
     updated_at: serverTimestamp(),
@@ -34,6 +38,12 @@ export async function getRequestsByOwner(ownerId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+/** Hent én service request */
+export async function getServiceRequest(id) {
+  const snap = await getDoc(doc(db, "service_requests", id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
 /** Opdater status på en request */
 export async function updateRequestStatus(requestId, status) {
   const ref = doc(db, "service_requests", requestId);
@@ -43,10 +53,39 @@ export async function updateRequestStatus(requestId, status) {
   });
 }
 
-/** Hent alle åbne requests (fx til providers senere) */
-export async function getOpenRequests() {
+/** Opdater en service request med vilkårlige felter (fx budget, beskrivelse osv.) */
+export async function updateServiceRequest(id, data) {
+  return updateDoc(doc(db, "service_requests", id), {
+    ...data,
+    updated_at: serverTimestamp(),
+  });
+}
+
+/** Hent alle åbne requests (engangsforespørgsel, fx til provider-feed) */
+export async function getOpenRequests(max = 100) {
   const ref = collection(db, "service_requests");
-  const q = query(ref, where("status", "==", "open"));
+  const q = query(ref, where("status", "==", "open"), limit(max));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/** Live-lyt på åbne service_requests */
+export function listenOpenServiceRequests(callback, errorCallback) {
+  const q = query(
+    collection(db, "service_requests"),
+    where("status", "==", "open"),
+    limit(200)
+  );
+
+  return onSnapshot(
+    q,
+    (snap) => {
+      const requests = [];
+      snap.forEach((d) => requests.push({ id: d.id, ...d.data() }));
+      callback(requests);
+    },
+    (error) => {
+      if (errorCallback) errorCallback(error);
+    }
+  );
 }

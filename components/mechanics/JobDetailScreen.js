@@ -7,10 +7,13 @@ import {
   Alert,
   ScrollView,
 } from "react-native";
-import { useRoute, useNavigation } from "@react-navigation/native";
-import { auth, db } from "../../firebase";
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { useRoute } from "@react-navigation/native";
+import { auth } from "../../firebase";
+import { updateServiceRequest, getServiceRequest } from "../../services/requestsService";
+import styles from "../../styles/mechanics/jobDetailStyles";
+import { serverTimestamp } from "firebase/firestore";
 
+// Formatér DKK
 function DKK(n) {
   return typeof n === "number"
     ? new Intl.NumberFormat("da-DK", {
@@ -23,7 +26,6 @@ function DKK(n) {
 
 export default function JobDetailScreen() {
   const route = useRoute();
-  const navigation = useNavigation();
   const user = auth.currentUser;
   const jobId = route?.params?.jobId;
 
@@ -31,10 +33,11 @@ export default function JobDetailScreen() {
   const [job, setJob] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // Hent service request
   async function reload() {
     try {
-      const snap = await getDoc(doc(db, "service_requests", jobId));
-      setJob(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+      const data = await getServiceRequest(jobId);
+      setJob(data);
     } catch (e) {
       Alert.alert("Fejl", "Kunne ikke hente service request.");
     } finally {
@@ -48,14 +51,16 @@ export default function JobDetailScreen() {
 
   const created = useMemo(() => {
     const ts = job?.created_at;
-    if (ts?.toDate)
+    if (ts?.toDate) {
       return new Intl.DateTimeFormat("da-DK", {
         dateStyle: "medium",
         timeStyle: "short",
       }).format(ts.toDate());
+    }
     return "";
   }, [job]);
 
+  // Status
   const rawStatus = String(job?.status || "").toLowerCase();
   const isOpen = rawStatus === "open";
   const isClaimed = rawStatus === "claimed";
@@ -67,13 +72,14 @@ export default function JobDetailScreen() {
   const iAmProvider =
     user?.uid && (job?.acceptedBy === user.uid || job?.providerId === user.uid);
 
+  // Actions
   async function onClaim() {
     if (!user?.uid)
       return Alert.alert("Ikke logget ind", "Log ind for at tage opgaven.");
     if (!job || !isOpen) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, "service_requests", job.id), {
+      await updateServiceRequest(job.id, {
         status: "claimed",
         acceptedBy: user.uid,
         acceptedAt: serverTimestamp(),
@@ -81,10 +87,7 @@ export default function JobDetailScreen() {
       await reload();
       Alert.alert("Job taget", "Service request er nu din.");
     } catch (e) {
-      Alert.alert(
-        "Fejl",
-        "Kunne ikke tage opgaven. " + (e?.message || "")
-      );
+      Alert.alert("Fejl", "Kunne ikke tage opgaven. " + (e?.message || ""));
     } finally {
       setSaving(false);
     }
@@ -94,7 +97,7 @@ export default function JobDetailScreen() {
     if (!(iAmProvider && (isClaimed || isOpen))) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, "service_requests", job.id), {
+      await updateServiceRequest(job.id, {
         status: "in_progress",
         startedAt: serverTimestamp(),
         acceptedBy: job?.acceptedBy || user.uid,
@@ -112,7 +115,7 @@ export default function JobDetailScreen() {
     if (!(iAmProvider && (isClaimed || inProgress))) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, "service_requests", job.id), {
+      await updateServiceRequest(job.id, {
         status: "completed",
         completedAt: serverTimestamp(),
         acceptedBy: job?.acceptedBy || user.uid,
@@ -129,30 +132,20 @@ export default function JobDetailScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <View style={styles.loader}>
         <ActivityIndicator />
-        <Text style={{ marginTop: 8, color: "#6b7280" }}>
+        <Text style={styles.loaderText}>
           Henter service request…
         </Text>
       </View>
     );
   }
+
   if (!job) {
     return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 24,
-        }}
-      >
-        <Text
-          style={{ fontWeight: "800", fontSize: 16, marginBottom: 6 }}
-        >
-          Ikke fundet
-        </Text>
-        <Text style={{ color: "#6b7280", textAlign: "center" }}>
+      <View style={styles.notFound}>
+        <Text style={styles.notFoundTitle}>Ikke fundet</Text>
+        <Text style={styles.notFoundText}>
           Prøv at gå tilbage til oversigten.
         </Text>
       </View>
@@ -160,157 +153,66 @@ export default function JobDetailScreen() {
   }
 
   const statusBadge = (() => {
-    const base = {
-      textTransform: "capitalize",
-      fontWeight: "800",
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 999,
-    };
     const s = rawStatus || "ukendt";
     if (isCompleted)
-      return (
-        <Text
-          style={{
-            ...base,
-            backgroundColor: "#e7f7ee",
-            color: "#1c8b4a",
-          }}
-        >
-          {s}
-        </Text>
-      );
+      return <Text style={styles.badgeCompleted}>{s}</Text>;
     if (inProgress)
-      return (
-        <Text
-          style={{
-            ...base,
-            backgroundColor: "#fff7ed",
-            color: "#b45309",
-          }}
-        >
-          {s}
-        </Text>
-      );
+      return <Text style={styles.badgeInProgress}>{s}</Text>;
     if (isClaimed)
-      return (
-        <Text
-          style={{
-            ...base,
-            backgroundColor: "#eef5fb",
-            color: "#1f5c7d",
-          }}
-        >
-          {s}
-        </Text>
-      );
-    return (
-      <Text
-        style={{
-          ...base,
-          backgroundColor: "#e5e7eb",
-          color: "#374151",
-        }}
-      >
-        {s}
-      </Text>
-    );
+      return <Text style={styles.badgeClaimed}>{s}</Text>;
+    return <Text style={styles.badgeDefault}>{s}</Text>;
   })();
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: "#f6f9fc" }}
-      contentContainerStyle={{ padding: 16 }}
-    >
-      <View
-        style={{
-          backgroundColor: "#fff",
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: "#e6eef4",
-          padding: 16,
-        }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "900",
-              color: "#0f1f2a",
-            }}
-          >
+    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.title}>
             {job.service_type || "Serviceforespørgsel"}
           </Text>
           {statusBadge}
         </View>
 
-        {created ? (
-          <Text style={{ marginTop: 4, color: "#6b7280" }}>
-            Oprettet: {created}
-          </Text>
-        ) : null}
+        {created ? <Text style={styles.created}>Oprettet: {created}</Text> : null}
 
         {job.description ? (
-          <View style={{ marginTop: 12 }}>
-            <Text style={{ fontWeight: "800", color: "#0f1f2a" }}>
-              Beskrivelse
-            </Text>
-            <Text style={{ marginTop: 6, color: "#374151" }}>
-              {job.description}
-            </Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Beskrivelse</Text>
+            <Text style={styles.sectionText}>{job.description}</Text>
           </View>
         ) : null}
 
         {job.boat_id ? (
-          <View style={{ marginTop: 12 }}>
-            <Text style={{ fontWeight: "800", color: "#0f1f2a" }}>Båd</Text>
-            <Text style={{ marginTop: 6, color: "#374151" }}>
-              ID: {job.boat_id}
-            </Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Båd</Text>
+            <Text style={styles.sectionText}>ID: {job.boat_id}</Text>
           </View>
         ) : null}
       </View>
 
-      <View style={{ height: 12 }} />
+      <View style={styles.spacer} />
 
       {isOpen && (
         <TouchableOpacity
           disabled={saving}
           onPress={onClaim}
-          style={{
-            backgroundColor: "#1f5c7d",
-            paddingVertical: 16,
-            alignItems: "center",
-            borderRadius: 14,
-            marginBottom: 10,
-          }}
+          style={styles.btnPrimary}
         >
-          <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
+          <Text style={styles.btnPrimaryText}>
             {saving ? "Udfører…" : "Tag opgaven"}
           </Text>
         </TouchableOpacity>
       )}
 
       {iAmProvider && !isCompleted && (
-        <View style={{ gap: 10 }}>
+        <View style={styles.actionGroup}>
           {(isClaimed || isOpen) && (
             <TouchableOpacity
               disabled={saving}
               onPress={onStart}
-              style={{
-                backgroundColor: "#fb923c",
-                paddingVertical: 16,
-                alignItems: "center",
-                borderRadius: 14,
-              }}
+              style={styles.btnWarn}
             >
-              <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
+              <Text style={styles.btnText}>
                 {saving ? "Starter…" : "Start arbejde"}
               </Text>
             </TouchableOpacity>
@@ -319,14 +221,9 @@ export default function JobDetailScreen() {
           <TouchableOpacity
             disabled={saving}
             onPress={onComplete}
-            style={{
-              backgroundColor: "#16a34a",
-              paddingVertical: 16,
-              alignItems: "center",
-              borderRadius: 14,
-            }}
+            style={styles.btnSuccess}
           >
-            <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
+            <Text style={styles.btnText}>
               {saving ? "Afslutter…" : "Afslut opgave"}
             </Text>
           </TouchableOpacity>
@@ -334,18 +231,8 @@ export default function JobDetailScreen() {
       )}
 
       {isCompleted && (
-        <View
-          style={{
-            padding: 14,
-            borderRadius: 12,
-            backgroundColor: "#e7f7ee",
-            borderWidth: 1,
-            borderColor: "#b7ebc5",
-            alignItems: "center",
-            marginTop: 4,
-          }}
-        >
-          <Text style={{ color: "#1c8b4a", fontWeight: "900" }}>
+        <View style={styles.completedBox}>
+          <Text style={styles.completedText}>
             Opgaven er afsluttet
           </Text>
         </View>
