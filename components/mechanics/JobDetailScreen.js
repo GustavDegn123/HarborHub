@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
-import { auth, db } from "../firebase";
+import { auth, db } from "../../firebase";
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 
 function DKK(n) {

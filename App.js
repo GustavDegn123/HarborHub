@@ -10,7 +10,7 @@ import SignUpScreen from "./components/shared/SignUpScreen";
 import StartTakingJobs from "./components/mechanics/StartTakingJobs";
 import ChooseWorkScreen from "./components/mechanics/ChooseWorkScreen";
 import JobsFeedScreen from "./components/mechanics/JobsFeedScreen";
-import JobDetailScreen from "./components/JobDetailScreen";
+import JobDetailScreen from "./components/mechanics/JobDetailScreen";
 import BoatFormScreen from "./components/boatowners/BoatFormScreen";
 import RequestsScreen from "./components/boatowners/RequestsScreen";
 import NewRequestScreen from "./components/boatowners/NewRequestScreen";
