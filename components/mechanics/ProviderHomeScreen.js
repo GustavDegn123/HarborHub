@@ -7,7 +7,7 @@ export default function ProviderHomeScreen({ navigation }) {
   const handleLogout = async () => {
     try {
       await logout();
-      navigation.replace("Login");
+      navigation.replace("LoginScreen");
     } catch (e) {
       console.warn("Logout error:", e?.message || e);
     }
