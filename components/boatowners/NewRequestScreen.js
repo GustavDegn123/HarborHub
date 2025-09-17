@@ -1,6 +1,5 @@
-// /components/NewRequestScreen.js
+// /components/boatowners/NewRequestScreen.js
 import React, { useEffect, useState } from "react";
-import { Picker } from "@react-native-picker/picker";
 import {
   View,
   Text,
@@ -12,9 +11,14 @@ import {
 } from "react-native";
 import Checkbox from "expo-checkbox";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { auth, db } from "../../firebase";
-import { collection, getDocs, Timestamp } from "firebase/firestore";
+import { auth } from "../../firebase";
+import { Timestamp } from "firebase/firestore";
+
+// services
+import { getBoats } from "../../services/boatsService";
 import { addRequest } from "../../services/requestsService";
+
+// styles
 import styles from "../../styles/boatowners/newRequestStyles";
 
 export default function NewRequestScreen({ navigation }) {
@@ -31,14 +35,12 @@ export default function NewRequestScreen({ navigation }) {
 
   const [loading, setLoading] = useState(true);
 
-  // Hent både fra Firestore
+  // Hent både via service
   useEffect(() => {
     const loadBoats = async () => {
       try {
         const ownerId = auth.currentUser.uid;
-        const ref = collection(db, "owners", ownerId, "boats");
-        const snap = await getDocs(ref);
-        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const data = await getBoats(ownerId);
         setBoats(data);
       } catch (err) {
         console.error("Fejl ved hentning af både:", err);
@@ -55,7 +57,7 @@ export default function NewRequestScreen({ navigation }) {
     setDate(currentDate);
   };
 
-  // Gem request
+  // Gem request via service
   const handleSave = async () => {
     if (!boatId) {
       Alert.alert("Fejl", "Vælg en båd først.");
@@ -92,60 +94,61 @@ export default function NewRequestScreen({ navigation }) {
       <Text style={styles.header}>Opret ny serviceopgave</Text>
 
       {/* --- Vælg båd --- */}
-<Text style={styles.label}>Vælg båd:</Text>
-<View style={styles.buttonGrid}>
-  {boats.map((b) => (
-    <TouchableOpacity
-      key={b.id}
-      style={[
-        styles.selectButton,
-        boatId === b.id && styles.selectButtonSelected,
-      ]}
-      onPress={() => setBoatId(b.id)}
-    >
-      <Text
-        style={[
-          styles.selectButtonText,
-          boatId === b.id && styles.selectButtonTextSelected,
-        ]}
-      >
-        {b.name}
-      </Text>
-    </TouchableOpacity>
-  ))}
-</View>
+      <Text style={styles.label}>Vælg båd:</Text>
+      <View style={styles.buttonGrid}>
+        {boats.map((b) => (
+          <TouchableOpacity
+            key={b.id}
+            style={[
+              styles.selectButton,
+              boatId === b.id && styles.selectButtonSelected,
+            ]}
+            onPress={() => setBoatId(b.id)}
+          >
+            <Text
+              style={[
+                styles.selectButtonText,
+                boatId === b.id && styles.selectButtonTextSelected,
+              ]}
+            >
+              {b.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
-{/* --- Service type --- */}
-<Text style={styles.label}>Service type:</Text>
-<View style={styles.buttonGrid}>
-  {[
-    "Bundmaling",
-    "Vinteropbevaring",
-    "Reparation",
-    "Elarbejde",
-    "Riggerservice",
-    "Polering",
-  ].map((type) => (
-    <TouchableOpacity
-      key={type}
-      style={[
-        styles.selectButton,
-        serviceType === type.toLowerCase() && styles.selectButtonSelected,
-      ]}
-      onPress={() => setServiceType(type.toLowerCase())}
-    >
-      <Text
-        style={[
-          styles.selectButtonText,
-          serviceType === type.toLowerCase() && styles.selectButtonTextSelected,
-        ]}
-      >
-        {type}
-      </Text>
-    </TouchableOpacity>
-  ))}
-</View>
-
+      {/* --- Service type --- */}
+      <Text style={styles.label}>Service type:</Text>
+      <View style={styles.buttonGrid}>
+        {[
+          "Bundmaling",
+          "Vinteropbevaring",
+          "Reparation",
+          "Elarbejde",
+          "Riggerservice",
+          "Polering",
+        ].map((type) => (
+          <TouchableOpacity
+            key={type}
+            style={[
+              styles.selectButton,
+              serviceType === type.toLowerCase() &&
+                styles.selectButtonSelected,
+            ]}
+            onPress={() => setServiceType(type.toLowerCase())}
+          >
+            <Text
+              style={[
+                styles.selectButtonText,
+                serviceType === type.toLowerCase() &&
+                  styles.selectButtonTextSelected,
+              ]}
+            >
+              {type}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       {/* --- Hvornår --- */}
       <Text style={styles.label}>Hvornår skal det ordnes?</Text>
@@ -177,7 +180,12 @@ export default function NewRequestScreen({ navigation }) {
       </View>
 
       {showDatePicker && (
-        <DateTimePicker value={date} mode="date" display="default" onChange={onChangeDate} />
+        <DateTimePicker
+          value={date}
+          mode="date"
+          display="default"
+          onChange={onChangeDate}
+        />
       )}
 
       {selectedOption !== "Fleksibel" && (
@@ -195,7 +203,9 @@ export default function NewRequestScreen({ navigation }) {
           color={isSpecificTime ? "#1f5c7d" : undefined}
           style={{ marginRight: 8 }}
         />
-        <Text style={styles.checkboxLabel}>Det skal være et specifikt tidsrum</Text>
+        <Text style={styles.checkboxLabel}>
+          Det skal være et specifikt tidsrum
+        </Text>
       </View>
 
       {isSpecificTime && (

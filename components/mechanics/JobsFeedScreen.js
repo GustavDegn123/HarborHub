@@ -8,24 +8,13 @@ import {
   RefreshControl,
 } from "react-native";
 import { getAuth } from "firebase/auth";
-import { db } from "../../firebase";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  limit,
-} from "firebase/firestore";
-import { distanceBetween } from "geofire-common";
 import styles from "../../styles/mechanics/jobsFeedStyles";
-
-const CHUNK_SIZE = 10;
+import { getJobsForProvider } from "../../services/jobsService";
 
 export default function JobsFeedScreen() {
   const auth = getAuth();
   const user = auth.currentUser;
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [jobs, setJobs] = useState([]);
@@ -34,58 +23,8 @@ export default function JobsFeedScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      const provSnap = await getDoc(doc(db, "providers", user.uid));
-      const prov = provSnap.exists() ? provSnap.data() : {};
-      const services = Array.isArray(prov?.services) ? prov.services : [];
-
-      if (services.length === 0) {
-        setJobs([]);
-        setLoading(false);
-        return;
-      }
-
-      const chunks = [];
-      for (let i = 0; i < services.length; i += CHUNK_SIZE) {
-        chunks.push(services.slice(i, i + CHUNK_SIZE));
-      }
-
-      let all = [];
-      for (const c of chunks) {
-        const qRef = query(
-          collection(db, "jobs"),
-          where("status", "==", "open"),
-          where("serviceId", "in", c),
-          limit(50)
-        );
-        const snap = await getDocs(qRef);
-        snap.forEach((d) => all.push({ id: d.id, ...d.data() }));
-      }
-
-      // sortér med distance først, ellers senest oprettet
-      if (prov?.geo?.lat && prov?.geo?.lng) {
-        const base = [prov.geo.lat, prov.geo.lng];
-        all = all.map((j) => {
-          let km = null;
-          if (j?.geo?.lat && j?.geo?.lng)
-            km = distanceBetween(base, [j.geo.lat, j.geo.lng]);
-          return { ...j, distanceKm: km };
-        });
-        all.sort((a, b) => {
-          if (a.distanceKm != null && b.distanceKm != null)
-            return a.distanceKm - b.distanceKm;
-          const ta = a?.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-          const tb = b?.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-          return tb - ta;
-        });
-      } else {
-        all.sort((a, b) => {
-          const ta = a?.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-          const tb = b?.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-          return tb - ta;
-        });
-      }
-
-      setJobs(all);
+      const allJobs = await getJobsForProvider(user.uid);
+      setJobs(allJobs);
     } catch (e) {
       console.warn("Jobs load error:", e?.message || e);
       setJobs([]);

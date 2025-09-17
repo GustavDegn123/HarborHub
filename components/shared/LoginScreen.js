@@ -1,3 +1,4 @@
+// /components/shared/LoginScreen.js
 import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, Image, Alert } from "react-native";
 import * as Google from "expo-auth-session/providers/google";
@@ -11,12 +12,14 @@ import Constants from "expo-constants";
 // styles
 import styles from "../../styles/shared/loginStyles";
 
+// Sørger for at Google redirect ikke hænger
 WebBrowser.maybeCompleteAuthSession();
 
-const LoginScreen = ({ navigation }) => {
+export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // Google login config
   const [request, response, promptAsync] = Google.useAuthRequest({
     expoClientId: "16622525056-qcgjdv8gkbunfgv4c8g79qm0brnjvoj5.apps.googleusercontent.com",
     iosClientId: "16622525056-7pgliodrdtnruh16cobp7kjb8h838g58.apps.googleusercontent.com",
@@ -24,10 +27,11 @@ const LoginScreen = ({ navigation }) => {
     webClientId: "16622525056-i5cbljlogf92qbdc505gcbrn8cne8r48.apps.googleusercontent.com",
     redirectUri: makeRedirectUri({
       scheme: "harborhub",
-      useProxy: Constants.appOwnership === "expo",
+      useProxy: Constants.appOwnership === "expo", // virker i Expo Go
     }),
   });
 
+  // Google login response
   useEffect(() => {
     if (response?.type === "success") {
       const { id_token } = response.params;
@@ -35,17 +39,21 @@ const LoginScreen = ({ navigation }) => {
         .then((user) => {
           Alert.alert("Google login", `✅ Velkommen ${user.email}`);
         })
-        .catch((err) => Alert.alert("Google login fejl", err.message));
+        .catch((err) => {
+          console.error("Google login fejl:", err);
+          Alert.alert("Google login fejl", err.message);
+        });
     }
   }, [response]);
 
+  // Email login
   const handleEmailLogin = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       Alert.alert("Success", "✅ Du er logget ind!");
     } catch (error) {
-      console.error(error);
-      Alert.alert("Login Error", error.message);
+      console.error("Login Error:", error);
+      Alert.alert("Login fejl", error.message);
     }
   };
 
@@ -55,12 +63,12 @@ const LoginScreen = ({ navigation }) => {
       <Image source={require("../../assets/logo.png")} style={styles.logoImage} />
 
       {/* Apple Login */}
-      <TouchableOpacity style={[styles.socialButton, styles.appleButton]}>
+      <TouchableOpacity style={[styles.socialButton, styles.appleButton]} onPress={() => Alert.alert("Apple login", "Ikke implementeret endnu.")}>
         <Text style={styles.appleText}> Log ind med Apple</Text>
       </TouchableOpacity>
 
       {/* Facebook Login */}
-      <TouchableOpacity style={[styles.socialButton, styles.facebookButton]}>
+      <TouchableOpacity style={[styles.socialButton, styles.facebookButton]} onPress={() => Alert.alert("Facebook login", "Ikke implementeret endnu.")}>
         <View style={styles.socialContent}>
           <Image source={require("../../assets/facebook.png")} style={styles.icon} />
           <Text style={styles.socialText}>Facebook</Text>
@@ -93,6 +101,7 @@ const LoginScreen = ({ navigation }) => {
         value={email}
         onChangeText={setEmail}
         keyboardType="email-address"
+        autoCapitalize="none"
       />
 
       {/* Password input */}
@@ -110,9 +119,9 @@ const LoginScreen = ({ navigation }) => {
       </TouchableOpacity>
 
       {/* Links */}
-      <TouchableOpacity>
-        <Text style={styles.forgotPassword}>Glemt adgangskode?</Text>
-      </TouchableOpacity>
+      <TouchableOpacity onPress={() => navigation.navigate("PasswordReset")}>
+  <Text style={styles.forgotPassword}>Glemt adgangskode?</Text>
+</TouchableOpacity>
 
       <TouchableOpacity onPress={() => navigation.navigate("SignUp")}>
         <Text style={styles.signUpText}>
@@ -121,6 +130,4 @@ const LoginScreen = ({ navigation }) => {
       </TouchableOpacity>
     </View>
   );
-};
-
-export default LoginScreen;
+}

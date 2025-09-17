@@ -12,12 +12,13 @@ import {
 import Slider from "@react-native-community/slider";
 import * as Location from "expo-location";
 import { geohashForLocation } from "geofire-common";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
-import { db } from "../../firebase";
 
 // styles
 import styles from "../../styles/mechanics/startTakingJobsStyles";
+
+// services
+import { saveProviderProfile, setUserRole } from "../../services/providersService";
 
 export default function StartTakingJobs({ navigation, route }) {
   const auth = getAuth();
@@ -58,6 +59,7 @@ export default function StartTakingJobs({ navigation, route }) {
 
     setSaving(true);
     setGeocoding(true);
+
     try {
       let homeGeo = null;
       if (picked?.lat && picked?.lng) {
@@ -68,10 +70,7 @@ export default function StartTakingJobs({ navigation, route }) {
         if (!homeGeo) {
           setGeocoding(false);
           setSaving(false);
-          Alert.alert(
-            "Kunne ikke finde adressen",
-            "Vælg placeringen på kortet i stedet."
-          );
+          Alert.alert("Kunne ikke finde adressen", "Vælg placeringen på kortet i stedet.");
           return openMap();
         }
       }
@@ -90,16 +89,11 @@ export default function StartTakingJobs({ navigation, route }) {
         workAreaText: workAreaAddress.trim() || null,
         workAreaGeo: workArea,
         active: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        createdAt: new Date(),
       };
 
-      await setDoc(doc(db, "providers", user.uid), payload, { merge: true });
-      await setDoc(
-        doc(db, "users", user.uid),
-        { role: "yard_owner", updatedAt: serverTimestamp() },
-        { merge: true }
-      );
+      await saveProviderProfile(user.uid, payload);
+      await setUserRole(user.uid, "provider"); // bruger bliver markeret som provider
 
       navigation.navigate("ChooseWork");
     } catch (e) {
@@ -172,24 +166,14 @@ export default function StartTakingJobs({ navigation, route }) {
         {geocoding && (
           <View style={styles.geoRow}>
             <ActivityIndicator />
-            <Text style={styles.geoText}>
-              Finder positioner for adresserne…
-            </Text>
+            <Text style={styles.geoText}>Finder positioner for adresserne…</Text>
           </View>
         )}
 
         <View style={{ flex: 1 }} />
 
-        <TouchableOpacity
-          onPress={onNext}
-          disabled={saving}
-          style={styles.nextBtn}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.nextBtnText}>Næste</Text>
-          )}
+        <TouchableOpacity onPress={onNext} disabled={saving} style={styles.nextBtn}>
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.nextBtnText}>Næste</Text>}
         </TouchableOpacity>
 
         <TouchableOpacity onPress={onSkip} style={styles.skipBtn}>

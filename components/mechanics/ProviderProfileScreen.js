@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, ScrollView } from "react-native";
 import { getAuth } from "firebase/auth";
-import { db } from "../../firebase";
-import { collection, doc, getDoc, getDocs, query, where, limit } from "firebase/firestore";
-
-// styles
+import {
+  getProviderProfile,
+  getProviderJobs,
+  getProviderPayouts,
+  getProviderReviews,
+} from "../../services/providersService";
 import styles from "../../styles/mechanics/providerProfileStyles";
 
 const DKK = (n) =>
@@ -24,7 +26,6 @@ export default function ProviderProfileScreen() {
 
   const [loading, setLoading] = useState(true);
   const [prov, setProv] = useState(null);
-
   const [jobsRaw, setJobsRaw] = useState([]);
   const [payouts, setPayouts] = useState([]);
   const [reviews, setReviews] = useState([]);
@@ -37,38 +38,28 @@ export default function ProviderProfileScreen() {
       if (!user) return;
       setLoading(true);
       try {
-        const provSnap = await getDoc(doc(db, "providers", user.uid));
-        const provider = provSnap.exists() ? provSnap.data() : {};
-        if (!cancelled) setProv(provider);
+        const [provData, jobsData, payoutsData, reviewsData] = await Promise.all([
+          getProviderProfile(user.uid),
+          getProviderJobs(user.uid),
+          getProviderPayouts(user.uid),
+          getProviderReviews(user.uid),
+        ]);
 
-        const qJobs = query(collection(db, "jobs"), where("claimedBy", "==", user.uid), limit(100));
-        const jobsSnap = await getDocs(qJobs);
-        let jobsArr = [];
-        jobsSnap.forEach(d => jobsArr.push({ id: d.id, ...d.data() }));
-        jobsArr.sort((a,b) => (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0));
-        if (!cancelled) setJobsRaw(jobsArr);
-
-        const qP = query(collection(db, "providers", user.uid, "payouts"), limit(50));
-        const payoutsSnap = await getDocs(qP);
-        const payoutsArr = [];
-        payoutsSnap.forEach(d => payoutsArr.push({ id: d.id, ...d.data() }));
-        payoutsArr.sort((a,b) => (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0));
-        if (!cancelled) setPayouts(payoutsArr);
-
-        const qR = query(collection(db, "reviews"), where("providerId", "==", user.uid), limit(50));
-        const reviewsSnap = await getDocs(qR);
-        const reviewsArr = [];
-        reviewsSnap.forEach(d => reviewsArr.push({ id: d.id, ...d.data() }));
-        reviewsArr.sort((a,b) => (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0));
-        if (!cancelled) setReviews(reviewsArr);
-
+        if (!cancelled) {
+          setProv(provData || {});
+          setJobsRaw(jobsData.sort((a, b) => (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0)));
+          setPayouts(payoutsData.sort((a, b) => (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0)));
+          setReviews(reviewsData.sort((a, b) => (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0)));
+        }
       } catch (e) {
         console.warn("ProviderProfile load error:", e?.message || e);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   // Filtrér jobs
@@ -77,7 +68,7 @@ export default function ProviderProfileScreen() {
     const maxAgeDays =
       filter === "d1" ? 1 : filter === "d7" ? 7 : filter === "d30" ? 30 : null;
 
-    return jobsRaw.filter(j => {
+    return jobsRaw.filter((j) => {
       const okStatus = j?.status === "completed" || j?.status === "paid";
       if (!okStatus) return false;
       if (!maxAgeDays) return true;
@@ -95,7 +86,7 @@ export default function ProviderProfileScreen() {
   const ratingText = useMemo(() => {
     const avg = prov?.ratingAvg ?? null;
     const cnt = prov?.ratingCount ?? null;
-    return (avg != null && cnt != null) ? `${avg.toFixed(1)} / 5 • ${cnt} anmeldelser` : "Ingen vurderinger endnu";
+    return avg != null && cnt != null ? `${avg.toFixed(1)} / 5 • ${cnt} anmeldelser` : "Ingen vurderinger endnu";
   }, [prov]);
 
   const renderJob = ({ item }) => (
@@ -104,11 +95,14 @@ export default function ProviderProfileScreen() {
         <Text style={styles.cardTitle}>{item?.title || "Opgave"}</Text>
         <Text style={styles.cardPrice}>{DKK(item?.price)}</Text>
       </View>
-      <Text style={styles.cardSub} numberOfLines={2}>{item?.description || "Ingen beskrivelse"}</Text>
+      <Text style={styles.cardSub} numberOfLines={2}>
+        {item?.description || "Ingen beskrivelse"}
+      </Text>
       <View style={[styles.rowBetween, { marginTop: 8 }]}>
         <Text style={styles.cardMeta}>{item?.serviceId || "ydelse"}</Text>
         <Text style={styles.cardMeta}>
-          {(item?.status || "").toUpperCase()}{dateStr(item?.createdAt) ? ` • ${dateStr(item?.createdAt)}` : ""}
+          {(item?.status || "").toUpperCase()}
+          {dateStr(item?.createdAt) ? ` • ${dateStr(item?.createdAt)}` : ""}
         </Text>
       </View>
     </View>
@@ -123,7 +117,7 @@ export default function ProviderProfileScreen() {
     );
   }
 
-  const displayName = prov?.displayName || prov?.companyName || (auth.currentUser?.email ?? "Udbyder");
+  const displayName = prov?.displayName || prov?.companyName || auth.currentUser?.email || "Udbyder";
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: "#f6f9fc" }}>
@@ -146,15 +140,21 @@ export default function ProviderProfileScreen() {
         {/* Filterchips */}
         <View style={styles.filters}>
           {[
-            {key:"all", label:"Alt"},
-            {key:"d30", label:"30 dage"},
-            {key:"d7",  label:"7 dage"},
-            {key:"d1",  label:"24 timer"},
-          ].map(f => (
-            <TouchableOpacity key={f.key}
+            { key: "all", label: "Alt" },
+            { key: "d30", label: "30 dage" },
+            { key: "d7", label: "7 dage" },
+            { key: "d1", label: "24 timer" },
+          ].map((f) => (
+            <TouchableOpacity
+              key={f.key}
               onPress={() => setFilter(f.key)}
-              style={[styles.filterChip, filter === f.key && styles.filterChipActive]}>
-              <Text style={[styles.filterChipText, filter === f.key && styles.filterChipTextActive]}>{f.label}</Text>
+              style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
+            >
+              <Text
+                style={[styles.filterChipText, filter === f.key && styles.filterChipTextActive]}
+              >
+                {f.label}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -184,7 +184,7 @@ export default function ProviderProfileScreen() {
         </View>
       ) : (
         <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-          {payouts.map(p => (
+          {payouts.map((p) => (
             <View key={p.id} style={styles.payoutRow}>
               <Text style={{ color: "#0f1f2a", fontWeight: "700" }}>{DKK(p?.amount)}</Text>
               <Text style={{ color: "#6b7280" }}>{dateStr(p?.createdAt)}</Text>
@@ -201,11 +201,13 @@ export default function ProviderProfileScreen() {
         </View>
       ) : (
         <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
-          {reviews.map(r => (
+          {reviews.map((r) => (
             <View key={r.id} style={styles.reviewCard}>
               <View style={styles.rowBetween}>
                 <Text style={{ fontWeight: "800", color: "#0f1f2a" }}>{r?.authorName || "Kunde"}</Text>
-                <Text style={{ color: "#0f1f2a", fontWeight: "800" }}>{r?.rating != null ? `${r.rating}/5` : "—"}</Text>
+                <Text style={{ color: "#0f1f2a", fontWeight: "800" }}>
+                  {r?.rating != null ? `${r.rating}/5` : "—"}
+                </Text>
               </View>
               {r?.comment ? <Text style={{ color: "#4b5563", marginTop: 4 }}>{r.comment}</Text> : null}
               <Text style={{ color: "#6b7280", marginTop: 6 }}>{dateStr(r?.createdAt)}</Text>

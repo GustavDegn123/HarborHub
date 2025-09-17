@@ -1,13 +1,12 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { signOut } from "firebase/auth";
-import { auth } from "../../firebase";
+import { logout } from "../../services/authService";   // 👈 brug service
 import styles from "../../styles/mechanics/providerHomeStyles";
 
 export default function ProviderHomeScreen({ navigation }) {
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await logout();
       navigation.replace("Login");
     } catch (e) {
       console.warn("Logout error:", e?.message || e);

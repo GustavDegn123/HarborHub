@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, FlatList, ActivityIndicator, Alert } from "react-native";
 import { getAuth } from "firebase/auth";
-import { db } from "../../firebase";
-import { collection, getDocs, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import styles from "../../styles/mechanics/chooseWorkStyles";
+import { getAvailableServices, saveProviderServices } from "../../services/providersService";
 
 const FALLBACK_SERVICES = [
   { id: "motorservice", name: "Motorservice" },
@@ -18,33 +17,38 @@ const FALLBACK_SERVICES = [
 export default function ChooseWorkScreen({ navigation }) {
   const auth = getAuth();
   const user = auth.currentUser;
+
   const [loading, setLoading] = useState(true);
   const [services, setServices] = useState(FALLBACK_SERVICES);
   const [mode, setMode] = useState(null);
   const [selected, setSelected] = useState({});
 
+  // Hent services fra Firestore (via service layer)
   useEffect(() => {
     let cancel = false;
     (async () => {
       try {
-        const snap = await getDocs(collection(db, "services"));
-        if (!cancel && !snap.empty) {
-          const arr = snap.docs.map(d => ({ id: d.id, ...(d.data()||{}), name: d.data()?.name || d.id }));
+        const arr = await getAvailableServices();
+        if (!cancel && arr.length > 0) {
           setServices(arr);
         }
-      } catch {} 
-      finally { if (!cancel) setLoading(false); }
+      } catch (err) {
+        console.warn("Kunne ikke hente services, bruger fallback:", err);
+      } finally {
+        if (!cancel) setLoading(false);
+      }
     })();
     return () => { cancel = true; };
   }, []);
 
   const selectedCount = useMemo(() => Object.values(selected).filter(Boolean).length, [selected]);
-  const toggle = (id) => setSelected(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const toggle = (id) => setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const chooseSuggestions = () => {
     const popular = ["motorservice", "bundmaling", "vinteropbevaring"];
     const pre = {};
-    popular.forEach(id => pre[id] = true);
+    popular.forEach((id) => (pre[id] = true));
     setSelected(pre);
     setMode("suggest");
   };
@@ -53,14 +57,12 @@ export default function ChooseWorkScreen({ navigation }) {
 
   const onDone = async () => {
     if (!user) return Alert.alert("Ikke logget ind", "Log ind først.");
-    const chosen = Object.keys(selected).filter(k => selected[k]);
-    if (chosen.length === 0) return Alert.alert("Vælg mindst én ydelse", "Vælg fra liste eller brug forslag.");
+    const chosen = Object.keys(selected).filter((k) => selected[k]);
+    if (chosen.length === 0)
+      return Alert.alert("Vælg mindst én ydelse", "Vælg fra liste eller brug forslag.");
+
     try {
-      await setDoc(
-        doc(db, "providers", user.uid),
-        { services: chosen, updatedAt: serverTimestamp() },
-        { merge: true }
-      );
+      await saveProviderServices(user.uid, chosen);
       navigation.reset({ index: 0, routes: [{ name: "JobsFeed" }] });
     } catch (e) {
       Alert.alert("Fejl ved gem", e?.message ?? "Noget gik galt.");
@@ -101,7 +103,9 @@ export default function ChooseWorkScreen({ navigation }) {
               onPress={() => toggle(item.id)}
               style={[
                 styles.serviceItem,
-                selected[item.id] ? styles.serviceItemSelected : styles.serviceItemUnselected,
+                selected[item.id]
+                  ? styles.serviceItemSelected
+                  : styles.serviceItemUnselected,
               ]}
             >
               <Text style={styles.serviceItemText}>{item.name}</Text>
@@ -120,13 +124,19 @@ export default function ChooseWorkScreen({ navigation }) {
 
       <TouchableOpacity
         onPress={onDone}
-        style={[styles.doneButton, mode ? styles.doneButtonEnabled : styles.doneButtonDisabled]}
+        style={[
+          styles.doneButton,
+          mode ? styles.doneButtonEnabled : styles.doneButtonDisabled,
+        ]}
         disabled={!mode}
       >
         <Text style={styles.doneButtonText}>Færdig</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.replace("ProviderHome")} style={styles.cancelButton}>
+      <TouchableOpacity
+        onPress={() => navigation.replace("ProviderHome")}
+        style={styles.cancelButton}
+      >
         <Text style={styles.cancelButtonText}>Jeg ønsker ikke at tjene penge</Text>
       </TouchableOpacity>
     </View>

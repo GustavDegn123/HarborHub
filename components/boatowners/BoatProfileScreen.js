@@ -1,9 +1,8 @@
 // components/ProfileScreen.js
 import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, ScrollView } from "react-native";
-import { auth, db } from "../../firebase";
-import { doc, getDoc } from "firebase/firestore";
 import styles from "../../styles/boatowners/boatProfileStyles";
+import { getCurrentUser, getUserData } from "../../services/authService";
 
 export default function ProfileScreen() {
   const [userData, setUserData] = useState(null);
@@ -12,18 +11,13 @@ export default function ProfileScreen() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const user = auth.currentUser;
+        const user = getCurrentUser();
         if (user) {
-          let data = {
-            email: user.email,
-            uid: user.uid,
-          };
+          let data = { email: user.email, uid: user.uid };
 
-          const docRef = doc(db, "users", user.uid);
-          const docSnap = await getDoc(docRef);
-
-          if (docSnap.exists()) {
-            data = { ...data, ...docSnap.data() };
+          const extra = await getUserData(user.uid);
+          if (extra) {
+            data = { ...data, ...extra };
           }
 
           setUserData(data);

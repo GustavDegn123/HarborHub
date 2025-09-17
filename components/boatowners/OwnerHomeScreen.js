@@ -1,15 +1,13 @@
+// components/boatowners/OwnerHomeScreen.js
 import React from "react";
 import { View, Text, TouchableOpacity, Alert } from "react-native";
-import { signOut } from "firebase/auth";
-import { auth } from "../../firebase";
-
-// styles
 import styles from "../../styles/boatowners/ownerHomeStyles";
+import { logout } from "../../services/authService";
 
 export default function OwnerHomeScreen({ navigation }) {
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await logout();
       Alert.alert("Logget ud", "Du er nu logget ud.");
       // onAuthStateChanged i App.js håndterer redirect til Login
     } catch (err) {

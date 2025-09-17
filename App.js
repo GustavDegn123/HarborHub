@@ -16,6 +16,7 @@ import NewRequestScreen from "./components/boatowners/NewRequestScreen";
 import BoatProfileScreen from "./components/boatowners/BoatProfileScreen";
 import ProviderProfileScreen from "./components/mechanics/ProviderProfileScreen";
 import MapPickerScreen from "./components/shared/MapPickerScreen";
+import PasswordResetScreen from "./components/shared/PasswordResetScreen";
 
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
@@ -122,7 +123,7 @@ export default function App() {
           // --- AUTH STACK ---
           <>
             <Stack.Screen
-              name="Login"
+              name="LoginScreen"
               component={LoginScreen}
               options={{ title: "Log ind" }}
             />
@@ -131,6 +132,7 @@ export default function App() {
               component={SignUpScreen}
               options={{ title: "Opret konto" }}
             />
+            <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
           </>
         )}
       </Stack.Navigator>

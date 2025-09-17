@@ -1,19 +1,19 @@
+// /components/shared/MapPickerScreen.js
 import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
-
-// styles
 import styles from "../../styles/shared/mapPickerStyles";
 
 export default function MapPickerScreen({ navigation, route }) {
   const start = route?.params?.start;
-  const [region, setRegion] = useState(() => ({
+
+  const [region, setRegion] = useState({
     latitude: start?.lat ?? 55.6761,
     longitude: start?.lng ?? 12.5683,
     latitudeDelta: 0.05,
     longitudeDelta: 0.05,
-  }));
+  });
   const [pin, setPin] = useState(start ? { latitude: start.lat, longitude: start.lng } : null);
   const [reverseLoading, setReverseLoading] = useState(false);
   const [addr, setAddr] = useState("");
@@ -23,13 +23,14 @@ export default function MapPickerScreen({ navigation, route }) {
     setPin({ latitude, longitude });
     setReverseLoading(true);
     try {
-      const r = await Location.reverseGeocodeAsync({ latitude, longitude });
-      let label = "";
-      if (r?.length) {
-        const a = r[0];
-        label = [a.name, a.street, a.postalCode, a.city].filter(Boolean).join(", ");
+      const results = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (results?.length) {
+        const a = results[0];
+        const label = [a.name, a.street, a.postalCode, a.city].filter(Boolean).join(", ");
+        setAddr(label || "Ukendt adresse");
+      } else {
+        setAddr("Ukendt adresse");
       }
-      setAddr(label || "Ukendt adresse");
     } catch {
       setAddr("Ukendt adresse");
     } finally {
