@@ -9,7 +9,6 @@ export default function OwnerHomeScreen({ navigation }) {
     try {
       await logout();
       Alert.alert("Logget ud", "Du er nu logget ud.");
-      // onAuthStateChanged i App.js håndterer redirect til Login
     } catch (err) {
       console.error("Fejl ved log ud:", err);
       Alert.alert("Fejl", "Kunne ikke logge ud, prøv igen.");
@@ -47,7 +46,15 @@ export default function OwnerHomeScreen({ navigation }) {
         <Text style={styles.buttonText}>Opret ny opgave</Text>
       </TouchableOpacity>
 
-      {/* Personlige detaljer (profil) */}
+      {/* Se bud på opgaver */}
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => navigation.navigate("RequestBids", { jobId: null })}
+      >
+        <Text style={styles.buttonText}>Se bud på mine opgaver</Text>
+      </TouchableOpacity>
+
+      {/* Personlige detaljer */}
       <TouchableOpacity
         style={styles.button}
         onPress={() => navigation.navigate("BoatProfile")}

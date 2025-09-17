@@ -14,6 +14,7 @@ import JobDetailScreen from "./components/mechanics/JobDetailScreen";
 import BoatFormScreen from "./components/boatowners/BoatFormScreen";
 import RequestsScreen from "./components/boatowners/RequestsScreen";
 import NewRequestScreen from "./components/boatowners/NewRequestScreen";
+import RequestBidsScreen from "./components/boatowners/RequestBidsScreen";
 import BoatProfileScreen from "./components/boatowners/BoatProfileScreen";
 import ProviderProfileScreen from "./components/mechanics/ProviderProfileScreen";
 import MapPickerScreen from "./components/shared/MapPickerScreen";
@@ -82,6 +83,11 @@ export default function App() {
                 name="NewRequest"
                 component={NewRequestScreen}
                 options={{ title: "Opret ny opgave" }}
+              />
+              <Stack.Screen
+                name="RequestBids"
+                component={RequestBidsScreen}
+                options={{ title: "Bud på opgaven" }}
               />
               <Stack.Screen
                 name="BoatProfile"

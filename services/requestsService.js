@@ -91,16 +91,18 @@ export function listenOpenServiceRequests(callback, errorCallback) {
   );
 }
 
-/** Hent provider-profil (fx geo, info osv.) */
 export async function getProvider(uid) {
+  if (!uid) return null;
   const snap = await getDoc(doc(db, "providers", uid));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
 export async function addBid(jobId, providerId, price, message) {
+  if (!providerId) throw new Error("Provider ID mangler");
+
   const ref = collection(db, "service_requests", jobId, "bids");
   await addDoc(ref, {
-    provider_id: providerId,
+    provider_id: providerId,  
     price: Number(price),
     message: message || "",
     created_at: serverTimestamp(),
@@ -109,7 +111,24 @@ export async function addBid(jobId, providerId, price, message) {
 
 export async function getBids(jobId) {
   const ref = collection(db, "service_requests", jobId, "bids");
+  // Brug Firestore indbygget sortering
   const q = query(ref, orderBy("created_at", "desc"));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      ...data,
+      created_at: data.created_at || null, // fallback hvis null
+    };
+  });
+}
+
+export async function acceptBid(jobId, bidId) {
+  const ref = doc(db, "service_requests", jobId);
+  await updateDoc(ref, {
+    acceptedBidId: bidId,
+    status: "assigned",
+  });
 }
