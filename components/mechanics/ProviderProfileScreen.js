@@ -1,55 +1,84 @@
+// components/mechanics/ProviderProfileScreen.js
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  FlatList,
+  ActivityIndicator,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+} from "react-native";
 import { getAuth } from "firebase/auth";
 import {
+  Timestamp,
+  doc,
+  updateDoc,
+  serverTimestamp,
+  collection,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
+import { db } from "../../firebase";
+import {
   getProviderProfile,
-  getProviderJobs,
+  listenProviderJobs,
+  listenProviderReviews,
   getProviderPayouts,
-  getProviderReviews,
 } from "../../services/providersService";
 import styles from "../../styles/mechanics/providerProfileStyles";
 
 const DKK = (n) =>
   typeof n === "number"
-    ? new Intl.NumberFormat("da-DK", { style: "currency", currency: "DKK", maximumFractionDigits: 0 }).format(n)
+    ? new Intl.NumberFormat("da-DK", {
+        style: "currency",
+        currency: "DKK",
+        maximumFractionDigits: 0,
+      }).format(n)
     : "–";
 
-const dateStr = (ts) => {
-  const d = ts?.toDate ? ts.toDate() : null;
-  if (!d) return "";
-  return new Intl.DateTimeFormat("da-DK", { dateStyle: "medium" }).format(d);
+const formatDateShort = (ts) => {
+  if (ts instanceof Timestamp) {
+    const d = ts.toDate();
+    return new Intl.DateTimeFormat("da-DK", {
+      day: "2-digit",
+      month: "short",
+    }).format(d);
+  }
+  return "";
 };
 
-export default function ProviderProfileScreen() {
+export default function ProviderProfileScreen({ navigation }) {
   const auth = getAuth();
   const user = auth.currentUser;
 
   const [loading, setLoading] = useState(true);
+  const [fixing, setFixing] = useState(false);
+
   const [prov, setProv] = useState(null);
-  const [jobsRaw, setJobsRaw] = useState([]);
+  const [jobs, setJobs] = useState([]);
   const [payouts, setPayouts] = useState([]);
   const [reviews, setReviews] = useState([]);
-  const [filter, setFilter] = useState("all");
 
-  // Hent provider-data
+  // Hent profil + payouts
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!user) return;
-      setLoading(true);
+      if (!user?.uid) return;
       try {
-        const [provData, jobsData, payoutsData, reviewsData] = await Promise.all([
+        const [provData, payoutsData] = await Promise.all([
           getProviderProfile(user.uid),
-          getProviderJobs(user.uid),
           getProviderPayouts(user.uid),
-          getProviderReviews(user.uid),
         ]);
-
         if (!cancelled) {
           setProv(provData || {});
-          setJobsRaw(jobsData.sort((a, b) => (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0)));
-          setPayouts(payoutsData.sort((a, b) => (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0)));
-          setReviews(reviewsData.sort((a, b) => (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0)));
+          setPayouts(
+            payoutsData.sort(
+              (a, b) =>
+                (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0)
+            )
+          );
         }
       } catch (e) {
         console.warn("ProviderProfile load error:", e?.message || e);
@@ -60,134 +89,228 @@ export default function ProviderProfileScreen() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user?.uid]);
 
-  // Filtrér jobs
-  const jobsFiltered = useMemo(() => {
-    const now = Date.now();
-    const maxAgeDays =
-      filter === "d1" ? 1 : filter === "d7" ? 7 : filter === "d30" ? 30 : null;
+  // Live jobs
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsub = listenProviderJobs(user.uid, (arr) => setJobs(arr));
+    return () => unsub();
+  }, [user?.uid]);
 
-    return jobsRaw.filter((j) => {
-      const okStatus = j?.status === "completed" || j?.status === "paid";
-      if (!okStatus) return false;
-      if (!maxAgeDays) return true;
-      const t = j?.createdAt?.toMillis?.();
-      if (!t) return false;
-      return (now - t) / (1000 * 60 * 60 * 24) <= maxAgeDays;
-    });
-  }, [jobsRaw, filter]);
+  // Live reviews
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsub = listenProviderReviews(user.uid, (arr) => setReviews(arr));
+    return () => unsub();
+  }, [user?.uid]);
 
-  const stats = useMemo(() => {
-    const total = jobsFiltered.reduce((s, j) => s + (typeof j.price === "number" ? j.price : 0), 0);
-    return { totalEarnings: total, jobsDone: jobsFiltered.length };
-  }, [jobsFiltered]);
-
-  const ratingText = useMemo(() => {
-    const avg = prov?.ratingAvg ?? null;
-    const cnt = prov?.ratingCount ?? null;
-    return avg != null && cnt != null ? `${avg.toFixed(1)} / 5 • ${cnt} anmeldelser` : "Ingen vurderinger endnu";
-  }, [prov]);
-
-  const renderJob = ({ item }) => (
-    <View style={styles.card}>
-      <View style={styles.rowBetween}>
-        <Text style={styles.cardTitle}>{item?.title || "Opgave"}</Text>
-        <Text style={styles.cardPrice}>{DKK(item?.price)}</Text>
-      </View>
-      <Text style={styles.cardSub} numberOfLines={2}>
-        {item?.description || "Ingen beskrivelse"}
-      </Text>
-      <View style={[styles.rowBetween, { marginTop: 8 }]}>
-        <Text style={styles.cardMeta}>{item?.serviceId || "ydelse"}</Text>
-        <Text style={styles.cardMeta}>
-          {(item?.status || "").toUpperCase()}
-          {dateStr(item?.createdAt) ? ` • ${dateStr(item?.createdAt)}` : ""}
-        </Text>
-      </View>
-    </View>
+  // Split jobs
+  const activeJobs = useMemo(
+    () =>
+      jobs.filter((j) =>
+        ["claimed", "in_progress", "inprogress"].includes(
+          String(j.status || "").toLowerCase()
+        )
+      ),
+    [jobs]
   );
+  const completedJobs = useMemo(
+    () =>
+      jobs.filter((j) =>
+        ["completed", "done", "finished", "complete"].includes(
+          String(j.status || "").toLowerCase()
+        )
+      ),
+    [jobs]
+  );
+
+  // KPI’er
+  const activeCount = activeJobs.length;
+  const completedCount = completedJobs.length;
+  const totalEarnings = useMemo(
+    () =>
+      completedJobs.reduce(
+        (s, j) => s + (typeof j.price === "number" ? j.price : 0),
+        0
+      ),
+    [completedJobs]
+  );
+  const ratingStats = useMemo(() => {
+    if (!reviews || reviews.length === 0) return { avg: null, count: 0 };
+    const valid = reviews.filter((r) => typeof r.rating === "number");
+    if (valid.length === 0) return { avg: null, count: 0 };
+    const avg = valid.reduce((s, r) => s + r.rating, 0) / valid.length;
+    return { avg: Math.round(avg * 10) / 10, count: valid.length };
+  }, [reviews]);
+
+  // Actions
+  async function startJob(job) {
+    if (job.acceptedBy !== user?.uid) return;
+    await updateDoc(doc(db, "jobs", job.id), {
+      status: "in_progress",
+      startedAt: job.startedAt || serverTimestamp(),
+    });
+  }
+  async function completeJob(job) {
+    if (job.acceptedBy !== user?.uid) return;
+    await updateDoc(doc(db, "jobs", job.id), {
+      status: "completed",
+      completedAt: serverTimestamp(),
+    });
+  }
+  async function normalizeLegacyJobs() {
+    if (!user?.uid) return;
+    setFixing(true);
+    try {
+      let changed = 0;
+      // A) Jobs i state
+      for (const j of jobs) {
+        const raw = String(j.status || "").toLowerCase();
+        const upd = {};
+        if (raw === "inprogress") upd.status = "in_progress";
+        if (["done", "finished", "complete"].includes(raw)) upd.status = "completed";
+        if (Object.keys(upd).length) {
+          await updateDoc(doc(db, "jobs", j.id), upd);
+          changed++;
+        }
+      }
+      // B) Legacy jobs providerId==uid uden acceptedBy
+      const qLegacy = query(collection(db, "jobs"), where("providerId", "==", user.uid));
+      const snapLegacy = await getDocs(qLegacy);
+      for (const d of snapLegacy.docs) {
+        const j = { id: d.id, ...d.data() };
+        if (!j.acceptedBy) {
+          const upd = { acceptedBy: user.uid, acceptedAt: serverTimestamp() };
+          const raw = String(j.status || "").toLowerCase();
+          if (raw === "inprogress") upd.status = "in_progress";
+          if (["accepted", "taken"].includes(raw)) upd.status = "claimed";
+          if (["done", "finished", "complete"].includes(raw)) upd.status = "completed";
+          await updateDoc(doc(db, "jobs", j.id), upd);
+          changed++;
+        }
+      }
+      Alert.alert("Normalisering fuldført", `${changed} job(s) opdateret.`);
+    } catch (e) {
+      Alert.alert("Fejl", e?.message || "Kunne ikke normalisere jobs.");
+    } finally {
+      setFixing(false);
+    }
+  }
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={styles.loader}>
         <ActivityIndicator />
-        <Text style={{ marginTop: 8, color: "#6b7280" }}>Henter profil…</Text>
+        <Text style={styles.loaderText}>Henter profil…</Text>
       </View>
     );
   }
 
-  const displayName = prov?.displayName || prov?.companyName || auth.currentUser?.email || "Udbyder";
+  const displayName =
+    prov?.displayName || prov?.companyName || auth.currentUser?.email || "Udbyder";
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: "#f6f9fc" }}>
-      <View style={styles.header}>
-        <Text style={styles.name}>{displayName}</Text>
-        <Text style={styles.rating}>{ratingText}</Text>
+    <ScrollView style={styles.screen} contentContainerStyle={{ padding: 16 }}>
+      <Text style={styles.header}>{displayName}</Text>
+      <Text style={styles.subheader}>
+        {ratingStats.avg != null
+          ? `${ratingStats.avg}/5 • ${ratingStats.count} anmeldelser`
+          : "Ingen vurderinger endnu"}
+      </Text>
 
-        {/* KPI'er */}
-        <View style={styles.kpis}>
-          <View style={styles.kpi}>
-            <Text style={styles.kpiLabel}>Indtjening</Text>
-            <Text style={styles.kpiValue}>{DKK(stats.totalEarnings)}</Text>
-          </View>
-          <View style={styles.kpi}>
-            <Text style={styles.kpiLabel}>Udførte jobs</Text>
-            <Text style={styles.kpiValue}>{stats.jobsDone}</Text>
-          </View>
+      {/* KPI GRID */}
+      <View style={styles.kpiGrid}>
+        <View style={styles.kpiCard}>
+          <Text style={styles.kpiLabel}>I gang</Text>
+          <Text style={styles.kpiValue}>{activeCount}</Text>
         </View>
-
-        {/* Filterchips */}
-        <View style={styles.filters}>
-          {[
-            { key: "all", label: "Alt" },
-            { key: "d30", label: "30 dage" },
-            { key: "d7", label: "7 dage" },
-            { key: "d1", label: "24 timer" },
-          ].map((f) => (
-            <TouchableOpacity
-              key={f.key}
-              onPress={() => setFilter(f.key)}
-              style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
-            >
-              <Text
-                style={[styles.filterChipText, filter === f.key && styles.filterChipTextActive]}
-              >
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.kpiCard}>
+          <Text style={styles.kpiLabel}>Færdige</Text>
+          <Text style={styles.kpiValue}>{completedCount}</Text>
+        </View>
+        <View style={styles.kpiCard}>
+          <Text style={styles.kpiLabel}>Indtjening</Text>
+          <Text style={styles.kpiValue}>{DKK(totalEarnings)}</Text>
+        </View>
+        <View style={styles.kpiCard}>
+          <Text style={styles.kpiLabel}>Rating</Text>
+          <Text style={styles.kpiValue}>
+            {ratingStats.avg != null ? `${ratingStats.avg}★` : "—"}{" "}
+            <Text style={styles.kpiMuted}>({ratingStats.count})</Text>
+          </Text>
         </View>
       </View>
 
-      {/* Jobs */}
-      <Text style={styles.sectionTitle}>Seneste jobs</Text>
-      {jobsFiltered.length === 0 ? (
-        <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-          <Text style={{ color: "#6b7280" }}>Ingen afsluttede jobs i valgte periode.</Text>
+      <TouchableOpacity
+        disabled={fixing}
+        onPress={normalizeLegacyJobs}
+        style={[styles.fixBtn, fixing && { opacity: 0.6 }]}
+      >
+        <Text style={styles.fixBtnText}>
+          {fixing ? "Normaliserer…" : "Ret gamle jobs"}
+        </Text>
+      </TouchableOpacity>
+
+      {/* Aktive jobs */}
+      <Text style={styles.sectionTitle}>Aktive jobs</Text>
+      {activeJobs.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyTitle}>Ingen aktive jobs</Text>
+          <Text style={styles.emptyText}>
+            Tag et job fra oversigten for at komme i gang.
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={jobsFiltered}
+          data={activeJobs}
           keyExtractor={(it) => it.id}
-          renderItem={renderJob}
           scrollEnabled={false}
-          contentContainerStyle={{ paddingBottom: 8 }}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={styles.cardRowTop}>
+                <Text style={styles.cardTitle}>{item.title || "Job"}</Text>
+                <Text style={styles.cardPrice}>{DKK(item.price)}</Text>
+              </View>
+              <Text style={styles.cardMeta}>{formatDateShort(item.createdAt)}</Text>
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                <TouchableOpacity
+                  style={styles.btnWarn}
+                  onPress={() => startJob(item)}
+                >
+                  <Text style={styles.btnText}>Start</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.btnSuccess}
+                  onPress={() => completeJob(item)}
+                >
+                  <Text style={styles.btnText}>Afslut</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         />
       )}
+
+      {/* Færdige jobs med stack */}
+      <Text style={styles.sectionTitle}>Færdige jobs</Text>
+      <CompletedStackVertical
+        items={completedJobs}
+        onOpen={(jobId) => navigation.navigate("JobDetail", { jobId })}
+      />
 
       {/* Udbetalinger */}
       <Text style={styles.sectionTitle}>Udbetalinger</Text>
       {payouts.length === 0 ? (
-        <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-          <Text style={{ color: "#6b7280" }}>Ingen udbetalinger endnu.</Text>
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyTitle}>Ingen udbetalinger endnu</Text>
         </View>
       ) : (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+        <View style={{ paddingBottom: 8 }}>
           {payouts.map((p) => (
             <View key={p.id} style={styles.payoutRow}>
-              <Text style={{ color: "#0f1f2a", fontWeight: "700" }}>{DKK(p?.amount)}</Text>
-              <Text style={{ color: "#6b7280" }}>{dateStr(p?.createdAt)}</Text>
+              <Text style={{ fontWeight: "700" }}>{DKK(p.amount)}</Text>
+              <Text style={{ color: "#6b7280" }}>{formatDateShort(p.createdAt)}</Text>
             </View>
           ))}
         </View>
@@ -196,25 +319,113 @@ export default function ProviderProfileScreen() {
       {/* Reviews */}
       <Text style={styles.sectionTitle}>Anmeldelser</Text>
       {reviews.length === 0 ? (
-        <View style={{ paddingHorizontal: 16, paddingVertical: 12, marginBottom: 20 }}>
-          <Text style={{ color: "#6b7280" }}>Ingen anmeldelser endnu.</Text>
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyTitle}>Ingen anmeldelser endnu</Text>
+          <Text style={styles.emptyText}>
+            Når bådejere anmelder dig, vises de her.
+          </Text>
         </View>
       ) : (
-        <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
-          {reviews.map((r) => (
-            <View key={r.id} style={styles.reviewCard}>
-              <View style={styles.rowBetween}>
-                <Text style={{ fontWeight: "800", color: "#0f1f2a" }}>{r?.authorName || "Kunde"}</Text>
-                <Text style={{ color: "#0f1f2a", fontWeight: "800" }}>
-                  {r?.rating != null ? `${r.rating}/5` : "—"}
+        <FlatList
+          data={reviews}
+          keyExtractor={(it) => it.id}
+          scrollEnabled={false}
+          contentContainerStyle={{ gap: 10 }}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={styles.cardRowTop}>
+                <Text style={styles.cardTitle}>
+                  {item.authorName || "Bådejer"}
+                </Text>
+                <Text style={styles.cardPrice}>
+                  {typeof item.rating === "number" ? `${item.rating}/5★` : "—"}
                 </Text>
               </View>
-              {r?.comment ? <Text style={{ color: "#4b5563", marginTop: 4 }}>{r.comment}</Text> : null}
-              <Text style={{ color: "#6b7280", marginTop: 6 }}>{dateStr(r?.createdAt)}</Text>
+              {item.comment && (
+                <Text style={styles.cardSub}>{item.comment}</Text>
+              )}
+              <Text style={styles.cardMeta}>
+                {formatDateShort(item.createdAt)}
+              </Text>
             </View>
-          ))}
-        </View>
+          )}
+        />
       )}
     </ScrollView>
+  );
+}
+
+/* ---------- Collapsed Completed Stack ---------- */
+function CompletedStackVertical({ items, onOpen }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!items || items.length === 0) {
+    return (
+      <View style={styles.emptyBox}>
+        <Text style={styles.emptyTitle}>Ingen færdige jobs endnu</Text>
+      </View>
+    );
+  }
+
+  if (expanded) {
+    return (
+      <>
+        <FlatList
+          data={items}
+          keyExtractor={(it) => it.id}
+          scrollEnabled={false}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              onPress={() => onOpen(item.id)}
+              style={styles.card}
+            >
+              <View style={styles.cardRowTop}>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                <Text style={styles.cardPrice}>{DKK(item.price)}</Text>
+              </View>
+              <Text style={styles.cardMeta}>{formatDateShort(item.createdAt)}</Text>
+            </TouchableOpacity>
+          )}
+        />
+        <TouchableOpacity
+          onPress={() => setExpanded(false)}
+          style={styles.stackToggle}
+        >
+          <Text style={styles.stackToggleText}>Vis som stak</Text>
+        </TouchableOpacity>
+      </>
+    );
+  }
+
+  const topN = items.slice(0, 3);
+  return (
+    <>
+      <View style={styles.stackWrap}>
+        {topN.map((it, idx) => (
+          <TouchableOpacity
+            key={it.id}
+            onPress={() => onOpen(it.id)}
+            style={[
+              styles.stackCard,
+              { top: idx * 12, zIndex: 100 - idx },
+            ]}
+          >
+            <View style={styles.cardRowTop}>
+              <Text style={styles.cardTitle}>{it.title}</Text>
+              <Text style={styles.cardPrice}>{DKK(it.price)}</Text>
+            </View>
+            <Text style={styles.cardMeta}>{formatDateShort(it.createdAt)}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <TouchableOpacity
+        onPress={() => setExpanded(true)}
+        style={styles.stackToggle}
+      >
+        <Text style={styles.stackToggleText}>
+          Se alle {items.length}
+        </Text>
+      </TouchableOpacity>
+    </>
   );
 }

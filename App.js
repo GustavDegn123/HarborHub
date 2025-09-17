@@ -10,6 +10,7 @@ import SignUpScreen from "./components/shared/SignUpScreen";
 import StartTakingJobs from "./components/mechanics/StartTakingJobs";
 import ChooseWorkScreen from "./components/mechanics/ChooseWorkScreen";
 import JobsFeedScreen from "./components/mechanics/JobsFeedScreen";
+import JobDetailScreen from "./components/JobDetailScreen";
 import BoatFormScreen from "./components/boatowners/BoatFormScreen";
 import RequestsScreen from "./components/boatowners/RequestsScreen";
 import NewRequestScreen from "./components/boatowners/NewRequestScreen";
@@ -110,6 +111,11 @@ export default function App() {
                 name="JobsFeed"
                 component={JobsFeedScreen}
                 options={{ title: "Tilgængelige opgaver" }}
+              />
+              <Stack.Screen
+                name="JobDetail"
+                component={JobDetailScreen}
+                options={{ title: "Jobdetaljer" }}
               />
               <Stack.Screen
                 name="MapPicker"
