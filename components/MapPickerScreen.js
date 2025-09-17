@@ -1,7 +1,10 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
+
+// styles
+import styles from "../styles/shared/mapPickerStyles";
 
 export default function MapPickerScreen({ navigation, route }) {
   const start = route?.params?.start;
@@ -72,18 +75,14 @@ export default function MapPickerScreen({ navigation, route }) {
           </Text>
         )}
 
-        <TouchableOpacity onPress={onConfirm} disabled={!confirmEnabled} style={[styles.btn, { opacity: confirmEnabled ? 1 : 0.5 }]}>
+        <TouchableOpacity
+          onPress={onConfirm}
+          disabled={!confirmEnabled}
+          style={[styles.btn, { opacity: confirmEnabled ? 1 : 0.5 }]}
+        >
           <Text style={styles.btnText}>Bekræft placering</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  panel: { position: "absolute", left: 12, right: 12, bottom: 16, backgroundColor: "white", borderRadius: 14, padding: 12, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  row: { flexDirection: "row", alignItems: "center" },
-  addr: { color: "#374151", fontSize: 14, marginTop: 2 },
-  btn: { marginTop: 10, backgroundColor: "#1f5c7d", paddingVertical: 12, alignItems: "center", borderRadius: 10 },
-  btnText: { color: "white", fontWeight: "700" },
-});

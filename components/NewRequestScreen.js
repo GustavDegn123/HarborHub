@@ -15,7 +15,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { auth, db } from "../firebase";
 import { collection, getDocs, Timestamp } from "firebase/firestore";
 import { addRequest } from "../services/requestsService";
-import styles from "../styles/newRequestStyles";
+import styles from "../styles/boatowners/newRequestStyles";
 
 export default function NewRequestScreen({ navigation }) {
   const [boats, setBoats] = useState([]);

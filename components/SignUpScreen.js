@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Alert } from "react-native";
 import { signUpUser } from "../services/authService";
 
 // styles
-import styles from "../styles/signUpStyles";
+import styles from "../styles/shared/signUpStyles";
 
 const SignUpScreen = ({ navigation }) => {
   const [email, setEmail] = useState("");

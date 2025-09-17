@@ -1,9 +1,25 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from "react-native";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+} from "react-native";
 import { getAuth } from "firebase/auth";
 import { db } from "../firebase";
-import { collection, doc, getDoc, getDocs, query, where, limit } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  limit,
+} from "firebase/firestore";
 import { distanceBetween } from "geofire-common";
+import styles from "../styles/mechanics/jobsFeedStyles";
 
 const CHUNK_SIZE = 10;
 
@@ -29,7 +45,9 @@ export default function JobsFeedScreen() {
       }
 
       const chunks = [];
-      for (let i = 0; i < services.length; i += CHUNK_SIZE) chunks.push(services.slice(i, i + CHUNK_SIZE));
+      for (let i = 0; i < services.length; i += CHUNK_SIZE) {
+        chunks.push(services.slice(i, i + CHUNK_SIZE));
+      }
 
       let all = [];
       for (const c of chunks) {
@@ -40,24 +58,27 @@ export default function JobsFeedScreen() {
           limit(50)
         );
         const snap = await getDocs(qRef);
-        snap.forEach(d => all.push({ id: d.id, ...d.data() }));
+        snap.forEach((d) => all.push({ id: d.id, ...d.data() }));
       }
 
+      // sortér med distance først, ellers senest oprettet
       if (prov?.geo?.lat && prov?.geo?.lng) {
         const base = [prov.geo.lat, prov.geo.lng];
-        all = all.map(j => {
+        all = all.map((j) => {
           let km = null;
-          if (j?.geo?.lat && j?.geo?.lng) km = distanceBetween(base, [j.geo.lat, j.geo.lng]);
+          if (j?.geo?.lat && j?.geo?.lng)
+            km = distanceBetween(base, [j.geo.lat, j.geo.lng]);
           return { ...j, distanceKm: km };
         });
-        all.sort((a,b) => {
-          if (a.distanceKm != null && b.distanceKm != null) return a.distanceKm - b.distanceKm;
+        all.sort((a, b) => {
+          if (a.distanceKm != null && b.distanceKm != null)
+            return a.distanceKm - b.distanceKm;
           const ta = a?.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
           const tb = b?.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
           return tb - ta;
         });
       } else {
-        all.sort((a,b) => {
+        all.sort((a, b) => {
           const ta = a?.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
           const tb = b?.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
           return tb - ta;
@@ -73,7 +94,9 @@ export default function JobsFeedScreen() {
     }
   }, [user]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -83,19 +106,17 @@ export default function JobsFeedScreen() {
 
   const renderItem = ({ item }) => {
     const price = item?.price != null ? `${item.price} kr` : "—";
-    const distance = item?.distanceKm != null ? `${item.distanceKm.toFixed(1)} km` : "";
+    const distance =
+      item?.distanceKm != null ? `${item.distanceKm.toFixed(1)} km` : "";
     return (
-      <TouchableOpacity
-        onPress={() => {}}
-        style={{ padding:14, marginHorizontal:16, marginVertical:8, borderRadius:12, borderWidth:1, borderColor:"#e5e7eb", backgroundColor:"#fff" }}
-      >
-        <Text style={{ fontSize:16, fontWeight:"700", marginBottom:4 }}>{item?.title || "Opgave"}</Text>
-        <Text style={{ color:"#4b5563", marginBottom:6 }} numberOfLines={2}>
+      <TouchableOpacity style={styles.jobCard} onPress={() => {}}>
+        <Text style={styles.jobTitle}>{item?.title || "Opgave"}</Text>
+        <Text style={styles.jobDescription} numberOfLines={2}>
           {item?.description || "Ingen beskrivelse"}
         </Text>
-        <View style={{ flexDirection:"row", justifyContent:"space-between" }}>
-          <Text style={{ color:"#1f2937", fontWeight:"600" }}>{price}</Text>
-          <Text style={{ color:"#6b7280" }}>{distance}</Text>
+        <View style={styles.jobMetaRow}>
+          <Text style={styles.jobPrice}>{price}</Text>
+          <Text style={styles.jobDistance}>{distance}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -103,21 +124,21 @@ export default function JobsFeedScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex:1, alignItems:"center", justifyContent:"center" }}>
+      <View style={styles.loader}>
         <ActivityIndicator />
-        <Text style={{ marginTop:8, color:"#6b7280" }}>Henter opgaver…</Text>
+        <Text style={styles.loaderText}>Henter opgaver…</Text>
       </View>
     );
   }
 
-  const empty = (!jobs || jobs.length === 0);
+  const empty = !jobs || jobs.length === 0;
 
   return (
-    <View style={{ flex:1, backgroundColor:"#f9fafb" }}>
+    <View style={styles.screen}>
       {empty ? (
-        <View style={{ flex:1, alignItems:"center", justifyContent:"center", padding:24 }}>
-          <Text style={{ fontSize:16, fontWeight:"700", marginBottom:6 }}>Ingen opgaver endnu</Text>
-          <Text style={{ color:"#6b7280", textAlign:"center" }}>
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyTitle}>Ingen opgaver endnu</Text>
+          <Text style={styles.emptySubtitle}>
             Prøv at vælge flere ydelser eller tjek igen senere.
           </Text>
         </View>
@@ -126,8 +147,10 @@ export default function JobsFeedScreen() {
           data={jobs}
           keyExtractor={(it) => it.id}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingVertical:8 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
         />
       )}
     </View>

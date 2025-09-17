@@ -3,7 +3,7 @@ import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import HomeScreen from "./components/HomeScreen";
+import ProviderHomeScreen from "./components/ProviderHomeScreen";
 import OwnerHomeScreen from "./components/OwnerHomeScreen";
 import LoginScreen from "./components/LoginScreen";
 import SignUpScreen from "./components/SignUpScreen";
@@ -92,8 +92,8 @@ export default function App() {
             // --- PROVIDER STACK ---
             <>
               <Stack.Screen
-                name="Home"
-                component={HomeScreen}
+                name="ProviderHome"
+                component={ProviderHomeScreen}
                 options={{ title: "HarborHub" }}
               />
               <Stack.Screen

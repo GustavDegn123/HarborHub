@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, ScrollView } from "react-native";
 import { getAuth } from "firebase/auth";
 import { db } from "../firebase";
 import { collection, doc, getDoc, getDocs, query, where, limit } from "firebase/firestore";
+
+// styles
+import styles from "../styles/mechanics/providerProfileStyles";
 
 const DKK = (n) =>
   typeof n === "number"
@@ -22,59 +25,41 @@ export default function ProviderProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [prov, setProv] = useState(null);
 
-  const [jobsRaw, setJobsRaw] = useState([]);     // alle hentede jobs (claimedBy = uid)
-  const [payouts, setPayouts] = useState([]);     // providers/{uid}/payouts
-  const [reviews, setReviews] = useState([]);     // reviews hvor providerId = uid
+  const [jobsRaw, setJobsRaw] = useState([]);
+  const [payouts, setPayouts] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [filter, setFilter] = useState("all");
 
-  const [filter, setFilter] = useState("all");    // all | d1 | d7 | d30
-
-  // HENT DATA (vi undgår krævende Firestore-indekser ved at sortere/filtrere i klienten)
+  // Hent provider-data
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!user) return;
       setLoading(true);
       try {
-        // Provider-profil
         const provSnap = await getDoc(doc(db, "providers", user.uid));
         const provider = provSnap.exists() ? provSnap.data() : {};
         if (!cancelled) setProv(provider);
 
-        // Jobs hvor jeg er udfører (claimedBy = uid), max 100
         const qJobs = query(collection(db, "jobs"), where("claimedBy", "==", user.uid), limit(100));
         const jobsSnap = await getDocs(qJobs);
         let jobsArr = [];
         jobsSnap.forEach(d => jobsArr.push({ id: d.id, ...d.data() }));
-        // sortér nyeste først
-        jobsArr.sort((a,b) => {
-          const ta = a?.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-          const tb = b?.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-          return tb - ta;
-        });
+        jobsArr.sort((a,b) => (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0));
         if (!cancelled) setJobsRaw(jobsArr);
 
-        // Payouts: providers/{uid}/payouts
         const qP = query(collection(db, "providers", user.uid, "payouts"), limit(50));
         const payoutsSnap = await getDocs(qP);
         const payoutsArr = [];
         payoutsSnap.forEach(d => payoutsArr.push({ id: d.id, ...d.data() }));
-        payoutsArr.sort((a,b) => {
-          const ta = a?.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-          const tb = b?.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-          return tb - ta;
-        });
+        payoutsArr.sort((a,b) => (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0));
         if (!cancelled) setPayouts(payoutsArr);
 
-        // Reviews: reviews hvor providerId = uid
         const qR = query(collection(db, "reviews"), where("providerId", "==", user.uid), limit(50));
         const reviewsSnap = await getDocs(qR);
         const reviewsArr = [];
         reviewsSnap.forEach(d => reviewsArr.push({ id: d.id, ...d.data() }));
-        reviewsArr.sort((a,b) => {
-          const ta = a?.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-          const tb = b?.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-          return tb - ta;
-        });
+        reviewsArr.sort((a,b) => (b?.createdAt?.toMillis?.() || 0) - (a?.createdAt?.toMillis?.() || 0));
         if (!cancelled) setReviews(reviewsArr);
 
       } catch (e) {
@@ -86,22 +71,19 @@ export default function ProviderProfileScreen() {
     return () => { cancelled = true; };
   }, [user]);
 
-  // Filtrer jobs (status completed/paid) og efter periode
+  // Filtrér jobs
   const jobsFiltered = useMemo(() => {
     const now = Date.now();
     const maxAgeDays =
-      filter === "d1" ? 1 :
-      filter === "d7" ? 7 :
-      filter === "d30" ? 30 : null;
+      filter === "d1" ? 1 : filter === "d7" ? 7 : filter === "d30" ? 30 : null;
 
     return jobsRaw.filter(j => {
       const okStatus = j?.status === "completed" || j?.status === "paid";
       if (!okStatus) return false;
       if (!maxAgeDays) return true;
-      const t = j?.createdAt?.toMillis ? j.createdAt.toMillis() : null;
+      const t = j?.createdAt?.toMillis?.();
       if (!t) return false;
-      const diffDays = (now - t) / (1000*60*60*24);
-      return diffDays <= maxAgeDays;
+      return (now - t) / (1000 * 60 * 60 * 24) <= maxAgeDays;
     });
   }, [jobsRaw, filter]);
 
@@ -113,8 +95,7 @@ export default function ProviderProfileScreen() {
   const ratingText = useMemo(() => {
     const avg = prov?.ratingAvg ?? null;
     const cnt = prov?.ratingCount ?? null;
-    if (avg != null && cnt != null) return `${avg.toFixed(1)} / 5 • ${cnt} anmeldelser`;
-    return "Ingen vurderinger endnu";
+    return (avg != null && cnt != null) ? `${avg.toFixed(1)} / 5 • ${cnt} anmeldelser` : "Ingen vurderinger endnu";
   }, [prov]);
 
   const renderJob = ({ item }) => (
@@ -146,12 +127,11 @@ export default function ProviderProfileScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: "#f6f9fc" }}>
-      {/* HEADER */}
       <View style={styles.header}>
         <Text style={styles.name}>{displayName}</Text>
         <Text style={styles.rating}>{ratingText}</Text>
 
-        {/* KPI'er + filterchips */}
+        {/* KPI'er */}
         <View style={styles.kpis}>
           <View style={styles.kpi}>
             <Text style={styles.kpiLabel}>Indtjening</Text>
@@ -163,6 +143,7 @@ export default function ProviderProfileScreen() {
           </View>
         </View>
 
+        {/* Filterchips */}
         <View style={styles.filters}>
           {[
             {key:"all", label:"Alt"},
@@ -179,7 +160,7 @@ export default function ProviderProfileScreen() {
         </View>
       </View>
 
-      {/* JOB-HISTORIK */}
+      {/* Jobs */}
       <Text style={styles.sectionTitle}>Seneste jobs</Text>
       {jobsFiltered.length === 0 ? (
         <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
@@ -195,7 +176,7 @@ export default function ProviderProfileScreen() {
         />
       )}
 
-      {/* UDBETALINGER */}
+      {/* Udbetalinger */}
       <Text style={styles.sectionTitle}>Udbetalinger</Text>
       {payouts.length === 0 ? (
         <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
@@ -212,7 +193,7 @@ export default function ProviderProfileScreen() {
         </View>
       )}
 
-      {/* REVIEWS */}
+      {/* Reviews */}
       <Text style={styles.sectionTitle}>Anmeldelser</Text>
       {reviews.length === 0 ? (
         <View style={{ paddingHorizontal: 16, paddingVertical: 12, marginBottom: 20 }}>
@@ -235,62 +216,3 @@ export default function ProviderProfileScreen() {
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
-
-  header: {
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eef2f7",
-  },
-  name: { fontSize: 22, fontWeight: "800", color: "#0f1f2a" },
-  rating: { marginTop: 4, color: "#4b5563" },
-
-  kpis: { flexDirection: "row", gap: 10, marginTop: 14 },
-  kpi: {
-    flex: 1,
-    backgroundColor: "#f8fbff",
-    borderWidth: 1,
-    borderColor: "#e6eef4",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  kpiLabel: { color: "#6b7280", marginBottom: 4, fontWeight: "600" },
-  kpiValue: { color: "#0f1f2a", fontSize: 18, fontWeight: "900" },
-
-  filters: { flexDirection: "row", gap: 8, marginTop: 12 },
-  filterChip: {
-    paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999,
-    backgroundColor: "#eef5fa", borderWidth: 1, borderColor: "#d8e6f0",
-  },
-  filterChipActive: { backgroundColor: "#1f5c7d", borderColor: "#1f5c7d" },
-  filterChipText: { color: "#1f5c7d", fontWeight: "700" },
-  filterChipTextActive: { color: "#fff" },
-
-  sectionTitle: { marginTop: 16, marginBottom: 8, paddingHorizontal: 16, color: "#0f1f2a", fontWeight: "800", fontSize: 16 },
-
-  card: {
-    marginHorizontal: 16, marginVertical: 6, backgroundColor: "#fff",
-    borderRadius: 12, borderWidth: 1, borderColor: "#e6eef4", padding: 12,
-  },
-  rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  cardTitle: { fontWeight: "800", color: "#0f1f2a" },
-  cardPrice: { fontWeight: "800", color: "#0f1f2a" },
-  cardSub: { color: "#4b5563", marginTop: 2 },
-  cardMeta: { color: "#6b7280" },
-
-  payoutRow: {
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#eef2f7",
-    flexDirection: "row", justifyContent: "space-between"
-  },
-
-  reviewCard: {
-    backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#e6eef4",
-    padding: 12, marginBottom: 10
-  },
-});

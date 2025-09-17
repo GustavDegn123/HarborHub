@@ -1,12 +1,13 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch } from "react-native";
 import { addBoat } from "../services/boatsService";
 import { auth } from "../firebase";
+import styles from "../styles/boatowners/boatFormStyles";
 
 export default function BoatFormScreen({ navigation }) {
   const [name, setName] = useState("");
   const [model, setModel] = useState("");
-  const [type, setType] = useState("sailboat"); // "sailboat" | "motorboat"
+  const [type, setType] = useState("sailboat");
   const [length, setLength] = useState("");
   const [width, setWidth] = useState("");
   const [draft, setDraft] = useState("");
@@ -29,7 +30,7 @@ export default function BoatFormScreen({ navigation }) {
       fuelConsumption: parseFloat(fuelConsumption) || 0,
       freeHarbor,
     });
-    navigation.goBack(); // tilbage til OwnerHomeScreen fx
+    navigation.goBack();
   };
 
   return (
@@ -72,15 +73,3 @@ export default function BoatFormScreen({ navigation }) {
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { padding: 20 },
-  title: { fontSize: 22, fontWeight: "700", marginBottom: 20 },
-  input: { borderWidth: 1, borderColor: "#ccc", padding: 12, borderRadius: 8, marginBottom: 12 },
-  row: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  typeBtn: { flex: 1, padding: 12, borderWidth: 1, borderColor: "#ccc", borderRadius: 8, alignItems: "center" },
-  typeBtnActive: { backgroundColor: "#1f5c7d", borderColor: "#1f5c7d" },
-  typeBtnText: { color: "white" },
-  saveBtn: { backgroundColor: "#1f5c7d", padding: 16, borderRadius: 10, alignItems: "center", marginTop: 20 },
-  saveBtnText: { color: "white", fontWeight: "700" },
-});

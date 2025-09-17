@@ -1,8 +1,10 @@
-// /components/OwnerHomeScreen.js
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
+
+// styles
+import styles from "../styles/boatowners/ownerHomeStyles";
 
 export default function OwnerHomeScreen({ navigation }) {
   const handleLogout = async () => {
@@ -57,7 +59,7 @@ export default function OwnerHomeScreen({ navigation }) {
 
       {/* Log ud */}
       <TouchableOpacity
-        style={[styles.button, { backgroundColor: "#a94442" }]}
+        style={[styles.button, styles.logoutButton]}
         onPress={handleLogout}
       >
         <Text style={styles.buttonText}>Log ud</Text>
@@ -65,17 +67,3 @@ export default function OwnerHomeScreen({ navigation }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
-  title: { fontSize: 24, fontWeight: "700", marginBottom: 10 },
-  subtitle: { fontSize: 16, color: "#555", textAlign: "center", marginBottom: 20 },
-  button: {
-    backgroundColor: "#1f5c7d",
-    padding: 14,
-    borderRadius: 10,
-    marginTop: 10,
-    width: "80%",
-  },
-  buttonText: { color: "white", textAlign: "center", fontWeight: "600" },
-});

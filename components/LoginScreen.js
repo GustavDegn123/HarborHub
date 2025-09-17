@@ -9,7 +9,7 @@ import { firebaseGoogleLogin } from "../services/authService";
 import Constants from "expo-constants";
 
 // styles
-import styles from "../styles/loginStyles";
+import styles from "../styles/shared/loginStyles";
 
 WebBrowser.maybeCompleteAuthSession();
 
