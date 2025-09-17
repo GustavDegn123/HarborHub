@@ -19,11 +19,11 @@ import {
   query,
   where,
   getDocs,
+  onSnapshot,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
   getProviderProfile,
-  listenProviderJobs,
   listenProviderReviews,
   getProviderPayouts,
 } from "../../services/providersService";
@@ -48,6 +48,20 @@ const formatDateShort = (ts) => {
   }
   return "";
 };
+
+// --- Lyt service_requests for en provider ---
+function listenProviderRequests(uid, callback, errorCallback) {
+  const q = query(collection(db, "service_requests"), where("acceptedBy", "==", uid));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const arr = [];
+      snap.forEach((d) => arr.push({ id: d.id, ...d.data() }));
+      callback(arr);
+    },
+    (err) => errorCallback?.(err)
+  );
+}
 
 export default function ProviderProfileScreen({ navigation }) {
   const auth = getAuth();
@@ -91,10 +105,10 @@ export default function ProviderProfileScreen({ navigation }) {
     };
   }, [user?.uid]);
 
-  // Live jobs
+  // Live service_requests
   useEffect(() => {
     if (!user?.uid) return;
-    const unsub = listenProviderJobs(user.uid, (arr) => setJobs(arr));
+    const unsub = listenProviderRequests(user.uid, (arr) => setJobs(arr));
     return () => unsub();
   }, [user?.uid]);
 
@@ -147,36 +161,41 @@ export default function ProviderProfileScreen({ navigation }) {
   // Actions
   async function startJob(job) {
     if (job.acceptedBy !== user?.uid) return;
-    await updateDoc(doc(db, "jobs", job.id), {
+    await updateDoc(doc(db, "service_requests", job.id), {
       status: "in_progress",
       startedAt: job.startedAt || serverTimestamp(),
     });
   }
   async function completeJob(job) {
     if (job.acceptedBy !== user?.uid) return;
-    await updateDoc(doc(db, "jobs", job.id), {
+    await updateDoc(doc(db, "service_requests", job.id), {
       status: "completed",
       completedAt: serverTimestamp(),
     });
   }
+
   async function normalizeLegacyJobs() {
     if (!user?.uid) return;
     setFixing(true);
     try {
       let changed = 0;
-      // A) Jobs i state
+      // A) Ret status for jobs i state
       for (const j of jobs) {
         const raw = String(j.status || "").toLowerCase();
         const upd = {};
         if (raw === "inprogress") upd.status = "in_progress";
         if (["done", "finished", "complete"].includes(raw)) upd.status = "completed";
+        if (["accepted", "taken"].includes(raw)) upd.status = "claimed";
         if (Object.keys(upd).length) {
-          await updateDoc(doc(db, "jobs", j.id), upd);
+          await updateDoc(doc(db, "service_requests", j.id), upd);
           changed++;
         }
       }
-      // B) Legacy jobs providerId==uid uden acceptedBy
-      const qLegacy = query(collection(db, "jobs"), where("providerId", "==", user.uid));
+      // B) Tilføj acceptedBy hvis mangler
+      const qLegacy = query(
+        collection(db, "service_requests"),
+        where("providerId", "==", user.uid)
+      );
       const snapLegacy = await getDocs(qLegacy);
       for (const d of snapLegacy.docs) {
         const j = { id: d.id, ...d.data() };
@@ -186,13 +205,13 @@ export default function ProviderProfileScreen({ navigation }) {
           if (raw === "inprogress") upd.status = "in_progress";
           if (["accepted", "taken"].includes(raw)) upd.status = "claimed";
           if (["done", "finished", "complete"].includes(raw)) upd.status = "completed";
-          await updateDoc(doc(db, "jobs", j.id), upd);
+          await updateDoc(doc(db, "service_requests", j.id), upd);
           changed++;
         }
       }
-      Alert.alert("Normalisering fuldført", `${changed} job(s) opdateret.`);
+      Alert.alert("Normalisering fuldført", `${changed} opgave(r) opdateret.`);
     } catch (e) {
-      Alert.alert("Fejl", e?.message || "Kunne ikke normalisere jobs.");
+      Alert.alert("Fejl", e?.message || "Kunne ikke normalisere opgaver.");
     } finally {
       setFixing(false);
     }
@@ -248,7 +267,7 @@ export default function ProviderProfileScreen({ navigation }) {
         style={[styles.fixBtn, fixing && { opacity: 0.6 }]}
       >
         <Text style={styles.fixBtnText}>
-          {fixing ? "Normaliserer…" : "Ret gamle jobs"}
+          {fixing ? "Normaliserer…" : "Ret gamle opgaver"}
         </Text>
       </TouchableOpacity>
 

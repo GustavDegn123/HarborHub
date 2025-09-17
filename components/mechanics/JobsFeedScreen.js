@@ -10,7 +10,7 @@ import {
 import { getAuth } from "firebase/auth";
 import { Timestamp } from "firebase/firestore";
 import styles from "../../styles/mechanics/jobsFeedStyles";
-import { getProvider, listenOpenJobs } from "../../services/jobsService";
+import { getProvider, listenOpenServiceRequests } from "../../services/serviceRequestsService";
 
 // --- Helper: beregn afstand (km) ---
 function haversineKm(a, b) {
@@ -33,7 +33,7 @@ export default function JobsFeedScreen({ navigation }) {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [jobs, setJobs] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [provider, setProvider] = useState(null);
   const [error, setError] = useState(null);
 
@@ -45,11 +45,11 @@ export default function JobsFeedScreen({ navigation }) {
       .catch((e) => setError(e?.message || String(e)));
   }, [user?.uid]);
 
-  // Live-lyt jobs
+  // Live-lyt på service_requests
   useEffect(() => {
-    const unsub = listenOpenJobs(
-      (jobs) => {
-        setJobs(jobs);
+    const unsub = listenOpenServiceRequests(
+      (reqs) => {
+        setRequests(reqs);
         setLoading(false);
       },
       (e) => {
@@ -65,14 +65,14 @@ export default function JobsFeedScreen({ navigation }) {
       ? { lat: provider.geo.lat, lng: provider.geo.lng }
       : null;
 
-  // Berig jobs med afstand + sortér
-  const displayJobs = useMemo(() => {
-    const enriched = jobs.map((j) => {
-      const jobGeo =
-        j?.geo?.lat && j?.geo?.lng ? { lat: j.geo.lat, lng: j.geo.lng } : null;
+  // Berig med afstand + sortér
+  const displayRequests = useMemo(() => {
+    const enriched = requests.map((r) => {
+      const reqGeo =
+        r?.geo?.lat && r?.geo?.lng ? { lat: r.geo.lat, lng: r.geo.lng } : null;
       const distanceKm =
-        providerGeo && jobGeo ? haversineKm(providerGeo, jobGeo) : null;
-      return { ...j, distanceKm };
+        providerGeo && reqGeo ? haversineKm(providerGeo, reqGeo) : null;
+      return { ...r, distanceKm };
     });
 
     enriched.sort((a, b) => {
@@ -85,11 +85,11 @@ export default function JobsFeedScreen({ navigation }) {
     });
 
     return enriched;
-  }, [jobs, providerGeo]);
+  }, [requests, providerGeo]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 500); // visual refresh
+    setTimeout(() => setRefreshing(false), 500);
   }, []);
 
   const renderItem = ({ item }) => {
@@ -106,7 +106,7 @@ export default function JobsFeedScreen({ navigation }) {
         style={styles.jobCard}
         onPress={() => navigation.navigate("JobDetail", { jobId: item.id })}
       >
-        <Text style={styles.jobTitle}>{item.title || "Job uden titel"}</Text>
+        <Text style={styles.jobTitle}>{item.service_type || "Serviceforespørgsel"}</Text>
 
         {item.description ? (
           <Text style={styles.jobDescription} numberOfLines={2}>
@@ -114,22 +114,12 @@ export default function JobsFeedScreen({ navigation }) {
           </Text>
         ) : null}
 
-        {/* Tags */}
         <View style={styles.tagWrap}>
-          {Array.isArray(item.requiredServices) && item.requiredServices.length > 0 ? (
-            item.requiredServices.slice(0, 3).map((s) => (
-              <View key={s} style={styles.tag}>
-                <Text style={styles.tagText}>{s}</Text>
-              </View>
-            ))
-          ) : (
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>Åben opgave</Text>
-            </View>
-          )}
+          <View style={styles.tag}>
+            <Text style={styles.tagText}>{item.service_type}</Text>
+          </View>
         </View>
 
-        {/* Meta info */}
         <View style={styles.jobMetaRow}>
           <Text style={styles.jobDistance}>{when}</Text>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -138,15 +128,6 @@ export default function JobsFeedScreen({ navigation }) {
             ) : (
               <Text style={styles.jobDistance}>Ukendt afstand</Text>
             )}
-            {typeof item.price === "number" ? (
-              <Text style={styles.jobPrice}>
-                {new Intl.NumberFormat("da-DK", {
-                  style: "currency",
-                  currency: "DKK",
-                  maximumFractionDigits: 0,
-                }).format(item.price)}
-              </Text>
-            ) : null}
           </View>
         </View>
       </TouchableOpacity>
@@ -157,7 +138,7 @@ export default function JobsFeedScreen({ navigation }) {
     return (
       <View style={styles.loader}>
         <ActivityIndicator />
-        <Text style={styles.loaderText}>Henter åbne opgaver…</Text>
+        <Text style={styles.loaderText}>Henter service requests…</Text>
       </View>
     );
   }
@@ -165,24 +146,24 @@ export default function JobsFeedScreen({ navigation }) {
   if (error) {
     return (
       <View style={styles.emptyWrap}>
-        <Text style={styles.emptyTitle}>Kunne ikke hente opgaver</Text>
+        <Text style={styles.emptyTitle}>Kunne ikke hente forespørgsler</Text>
         <Text style={styles.emptySubtitle}>{error}</Text>
       </View>
     );
   }
 
-  const empty = !displayJobs || displayJobs.length === 0;
+  const empty = !displayRequests || displayRequests.length === 0;
 
   return (
     <View style={styles.screen}>
       {empty ? (
         <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>Ingen åbne opgaver</Text>
-          <Text style={styles.emptySubtitle}>Der er ingen åbne opgaver lige nu.</Text>
+          <Text style={styles.emptyTitle}>Ingen åbne forespørgsler</Text>
+          <Text style={styles.emptySubtitle}>Der er ingen åbne forespørgsler lige nu.</Text>
         </View>
       ) : (
         <FlatList
-          data={displayJobs}
+          data={displayRequests}
           keyExtractor={(it) => it.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
