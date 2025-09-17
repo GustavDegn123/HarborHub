@@ -1,78 +1,170 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
 
 export default function HomeScreen({ navigation }) {
-  const handleLogout = async () => { try { await signOut(auth); } catch (e) { console.warn(e?.message || e); } };
-  const goOnboarding = () => navigation.navigate("StartTakingJobs");
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigation.replace("Login");
+    } catch (e) {
+      console.warn("Logout error:", e?.message || e);
+    }
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#ECF6FF" }}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <View style={styles.topbar}>
-          <View style={styles.brandLeft}>
-            <View style={styles.logoDot} />
-            <Text style={styles.brand}>HarborHub</Text>
+    <View style={styles.screen}>
+      {/* HERO / BRAND */}
+      <View style={styles.hero}>
+        <View style={styles.brandRow}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>HarborHub</Text>
           </View>
-          <TouchableOpacity onPress={() => navigation.navigate("JobsFeed")} style={styles.topIconBtn}>
-            <Feather name="briefcase" size={20} color="#0f1f2a" />
-          </TouchableOpacity>
+          <Text style={styles.tagline}>Services til både – samlet ét sted</Text>
         </View>
 
-        <View style={styles.heroWrap}>
-          <View style={styles.heroCard}>
-            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10 }}>
-              <Feather name="anchor" size={22} color="#0f1f2a" />
-              <Text style={styles.heroEyebrow}>Velkommen til</Text>
-            </View>
-            <Text style={styles.heroTitle}>HarborHub</Text>
-            <Text style={styles.heroSubtitle}>Få overblik, tag opgaver og tjen på din ekspertise ⚓</Text>
-
-            <TouchableOpacity activeOpacity={0.9} onPress={goOnboarding} style={styles.ctaPrimaryGrad}>
-              <Feather name="compass" size={18} color="#fff" />
-              <Text style={styles.ctaPrimaryText}>Bliv udbyder (onboarding)</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity activeOpacity={0.9} onPress={handleLogout} style={styles.ctaGhost}>
-              <Feather name="log-out" size={18} color="#e54848" />
-              <Text style={styles.ctaGhostText}>Log ud</Text>
-            </TouchableOpacity>
+        {/* Minimal illustration (emoji + cirkel) */}
+        <View style={styles.illustrationWrap}>
+          <View style={styles.illustrationCircle}>
+            <Text style={styles.boatEmoji}>🛥️</Text>
           </View>
         </View>
+      </View>
 
-        <View style={styles.features}>
-          <View style={styles.chip}><Feather name="map-pin" size={16} color="#1f5c7d" /><Text style={styles.chipText}>Vælg placering</Text></View>
-          <View style={styles.chip}><Feather name="settings" size={16} color="#1f5c7d" /><Text style={styles.chipText}>Vælg ydelser</Text></View>
-          <View style={styles.chip}><Feather name="check-circle" size={16} color="#1f5c7d" /><Text style={styles.chipText}>Tag job</Text></View>
-        </View>
-      </SafeAreaView>
+      {/* CARD */}
+      <View style={styles.card}>
+        <Text style={styles.title}>
+          Velkommen til HarborHub <Text style={{opacity:0.9}}>🛥️</Text>
+        </Text>
+        <Text style={styles.subtitle}>
+          Vælg hvad du vil gøre – vi klarer resten.
+        </Text>
+
+        <View style={{height:12}} />
+
+        {/* CTA-KNAPPER */}
+        <TouchableOpacity style={styles.ctaPrimary} onPress={() => navigation.navigate("StartTakingJobs")}>
+          <Text style={styles.ctaPrimaryText}>Bliv udbyder (onboarding)</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.ctaPrimary} onPress={() => navigation.navigate("JobsFeed")}>
+          <Text style={styles.ctaPrimaryText}>Se tilgængelige jobs</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.ctaSecondary} onPress={() => navigation.navigate("ProviderProfile")}>
+          <Text style={styles.ctaSecondaryText}>Min profil</Text>
+        </TouchableOpacity>
+
+        <View style={{height:10}} />
+
+        <TouchableOpacity style={styles.ctaGhost} onPress={handleLogout}>
+          <Text style={styles.ctaGhostText}>Log ud</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* FOOTER INFO */}
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>Bygget med ❤️ til sejlere</Text>
+      </View>
     </View>
   );
 }
 
+const BLUE = "#1f5c7d";
+const BLUE_DARK = "#184a63";
+const BG = "#f3f7fb";
+
 const styles = StyleSheet.create({
-  topbar:{paddingHorizontal:20,paddingTop:4,paddingBottom:6,flexDirection:"row",alignItems:"center",justifyContent:"space-between"},
-  brandLeft:{flexDirection:"row",alignItems:"center"},
-  brand:{fontSize:20,fontWeight:"800",color:"#0f1f2a",letterSpacing:0.3,marginLeft:8},
-  logoDot:{width:10,height:10,borderRadius:6,backgroundColor:"#1f5c7d"},
-  topIconBtn:{height:36,width:36,borderRadius:10,backgroundColor:"#ffffff",alignItems:"center",justifyContent:"center",
-    shadowColor:"#000",shadowOpacity:0.08,shadowRadius:6,shadowOffset:{width:0,height:3},elevation:2},
-  heroWrap:{paddingHorizontal:20,marginTop:24},
-  heroCard:{backgroundColor:"#ffffff",borderRadius:20,padding:18,shadowColor:"#000",shadowOpacity:0.10,shadowRadius:16,
-    shadowOffset:{width:0,height:8},elevation:4},
-  heroEyebrow:{marginLeft:8,color:"#334155",fontWeight:"700",letterSpacing:0.4},
-  heroTitle:{fontSize:32,lineHeight:36,fontWeight:"900",color:"#0f1f2a",marginBottom:8},
-  heroSubtitle:{color:"#475569",marginBottom:16,lineHeight:20},
-  ctaPrimaryGrad:{flexDirection:"row",alignItems:"center",justifyContent:"center",paddingVertical:14,gap:8,borderRadius:14,
-    backgroundColor:"#1f5c7d",marginBottom:10},
-  ctaPrimaryText:{color:"#fff",fontWeight:"800",fontSize:16},
-  ctaGhost:{flexDirection:"row",alignItems:"center",justifyContent:"center",borderRadius:12,paddingVertical:12,borderWidth:1,
-    borderColor:"#ffd1d1",backgroundColor:"#fff5f5",gap:8},
-  ctaGhostText:{color:"#e54848",fontWeight:"800",fontSize:15},
-  features:{flexDirection:"row",justifyContent:"center",gap:10,paddingHorizontal:20,marginTop:18},
-  chip:{flexDirection:"row",alignItems:"center",gap:6,backgroundColor:"#ffffff",borderRadius:999,paddingVertical:8,paddingHorizontal:12,
-    borderWidth:1,borderColor:"#e6eef4",shadowColor:"#000",shadowOpacity:0.05,shadowRadius:8,shadowOffset:{width:0,height:4},elevation:2},
-  chipText:{color:"#0f1f2a",fontWeight:"600"},
+  screen: { flex: 1, backgroundColor: BG },
+
+  hero: {
+    paddingTop: 28,
+    paddingHorizontal: 20,
+  },
+  brandRow: { gap: 8 },
+  badge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#ffffff",
+    borderColor: "#e6eef4",
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  badgeText: { fontWeight: "800", color: BLUE, letterSpacing: 0.3 },
+  tagline: { color: "#5a6b78", fontWeight: "600" },
+
+  illustrationWrap: { alignItems: "center", marginTop: 18 },
+  illustrationCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 64,
+    backgroundColor: "#e9f2f9",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#d7e6f3",
+  },
+  boatEmoji: { fontSize: 44 },
+
+  card: {
+    marginTop: 16,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    marginHorizontal: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#e6eef4",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  title: { fontSize: 22, color: "#0f1f2a", fontWeight: "900" },
+  subtitle: { marginTop: 6, color: "#4b5563" },
+
+  ctaPrimary: {
+    marginTop: 14,
+    backgroundColor: BLUE,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  ctaPrimaryText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+
+  ctaSecondary: {
+    marginTop: 10,
+    backgroundColor: "#f2f8fc",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#cfe1ec",
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  ctaSecondaryText: { color: BLUE, fontSize: 16, fontWeight: "800" },
+
+  ctaGhost: {
+    backgroundColor: "#fff5f5",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#ffd1d1",
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  ctaGhostText: { color: "#e54848", fontSize: 16, fontWeight: "800" },
+
+  footer: { alignItems: "center", marginTop: 18 },
+  footerText: { color: "#8aa0b0", fontSize: 12, fontWeight: "700" },
 });

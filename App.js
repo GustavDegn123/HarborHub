@@ -14,6 +14,7 @@ import BoatFormScreen from "./components/BoatFormScreen";
 import RequestsScreen from "./components/RequestsScreen";
 import NewRequestScreen from "./components/NewRequestScreen";
 import BoatProfileScreen from "./components/BoatProfileScreen";
+import ProviderProfileScreen from "./components/ProviderProfileScreen";
 
 const MapPickerScreen = require("./components/MapPickerScreen").default;
 
@@ -115,6 +116,7 @@ export default function App() {
                 component={MapPickerScreen}
                 options={{ title: "Vælg placering" }}
               />
+              <Stack.Screen name="ProviderProfile" component={ProviderProfileScreen} options={{ title: "Min profil" }} />
             </>
           )
         ) : (
