@@ -11,6 +11,7 @@ import {
   serverTimestamp,
   limit,
   onSnapshot,
+  orderBy,
 } from "firebase/firestore";
 
 /** Opret en ny service request */
@@ -94,4 +95,21 @@ export function listenOpenServiceRequests(callback, errorCallback) {
 export async function getProvider(uid) {
   const snap = await getDoc(doc(db, "providers", uid));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function addBid(jobId, providerId, price, message) {
+  const ref = collection(db, "service_requests", jobId, "bids");
+  await addDoc(ref, {
+    provider_id: providerId,
+    price: Number(price),
+    message: message || "",
+    created_at: serverTimestamp(),
+  });
+}
+
+export async function getBids(jobId) {
+  const ref = collection(db, "service_requests", jobId, "bids");
+  const q = query(ref, orderBy("created_at", "desc"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }

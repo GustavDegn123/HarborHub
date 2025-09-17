@@ -63,18 +63,18 @@ export default function JobsFeedScreen({ navigation }) {
       async (reqs) => {
         // 👇 Hent bådnavne for hver request
         const enriched = await Promise.all(
-          reqs.map(async (r) => {
-            let boat = null;
-            if (r.boat_id) {
-              try {
-                boat = await getBoat(r.boat_id);
-              } catch (e) {
-                console.log("Kunne ikke hente båd:", e);
-              }
-            }
-            return { ...r, boat };
-          })
-        );
+  reqs.map(async (r) => {
+    let boat = null;
+    if (r.boat_id && r.owner_id) {
+      try {
+        boat = await getBoat(r.owner_id, r.boat_id);
+      } catch (e) {
+        console.log("Kunne ikke hente båd:", e);
+      }
+    }
+    return { ...r, boat };
+  })
+);
         setRequests(enriched);
         setLoading(false);
       },

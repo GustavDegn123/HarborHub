@@ -148,4 +148,45 @@ export default StyleSheet.create({
     color: "#1c8b4a",
     fontWeight: "900",
   },
+
+  bidBox: {
+  backgroundColor: "#fff",
+  borderRadius: 16,
+  borderWidth: 1,
+  borderColor: "#e6eef4",
+  padding: 16,
+  marginTop: 16,
+},
+
+input: {
+  borderWidth: 1,
+  borderColor: "#d1d5db",
+  borderRadius: 12,
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  marginBottom: 12,
+  backgroundColor: "#f9fafb",
+},
+
+bidItem: {
+  backgroundColor: "#fff",
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: "#e6eef4",
+  padding: 12,
+  marginTop: 10,
+},
+
+bidPrice: {
+  fontSize: 16,
+  fontWeight: "900",
+  color: "#1f5c7d",
+},
+
+bidMessage: {
+  marginTop: 4,
+  color: "#374151",
+  fontStyle: "italic",
+},
+
 });

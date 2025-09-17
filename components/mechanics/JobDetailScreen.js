@@ -6,12 +6,17 @@ import {
   TouchableOpacity,
   Alert,
   ScrollView,
+  TextInput,
 } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import { auth } from "../../firebase";
-import { updateServiceRequest, getServiceRequest } from "../../services/requestsService";
+import {
+  getServiceRequest,
+  addBid,
+  getBids,
+} from "../../services/requestsService";
+import { getBoat } from "../../services/boatsService";
 import styles from "../../styles/mechanics/jobDetailStyles";
-import { serverTimestamp } from "firebase/firestore";
 
 // Formatér DKK
 function DKK(n) {
@@ -31,13 +36,36 @@ export default function JobDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [job, setJob] = useState(null);
+  const [boat, setBoat] = useState(null);
+  const [bids, setBids] = useState([]);
   const [saving, setSaving] = useState(false);
 
-  // Hent service request
+  // Form state til bud
+  const [price, setPrice] = useState("");
+  const [message, setMessage] = useState("");
+
+  // Hent service request + båd + bud
   async function reload() {
     try {
       const data = await getServiceRequest(jobId);
       setJob(data);
+
+      if (data?.boat_id && data?.owner_id) {
+        try {
+          const b = await getBoat(data.owner_id, data.boat_id);
+          setBoat(b);
+        } catch (e) {
+          console.log("Kunne ikke hente båd:", e);
+        }
+      }
+
+      try {
+        const bidList = await getBids(jobId);
+        setBids(bidList);
+      } catch (e) {
+        console.log("Kunne ikke hente bud:", e);
+        setBids([]);
+      }
     } catch (e) {
       Alert.alert("Fejl", "Kunne ikke hente service request.");
     } finally {
@@ -60,71 +88,26 @@ export default function JobDetailScreen() {
     return "";
   }, [job]);
 
-  // Status
   const rawStatus = String(job?.status || "").toLowerCase();
   const isOpen = rawStatus === "open";
-  const isClaimed = rawStatus === "claimed";
-  const inProgress =
-    rawStatus === "in_progress" || rawStatus === "inprogress";
   const isCompleted = rawStatus === "completed";
 
   const iAmOwner = user?.uid && job?.owner_id === user.uid;
-  const iAmProvider =
-    user?.uid && (job?.acceptedBy === user.uid || job?.providerId === user.uid);
 
-  // Actions
-  async function onClaim() {
-    if (!user?.uid)
-      return Alert.alert("Ikke logget ind", "Log ind for at tage opgaven.");
-    if (!job || !isOpen) return;
+  // Afgiv bud
+  async function onBid() {
+    if (!user?.uid) return Alert.alert("Ikke logget ind", "Log ind for at byde.");
+    if (!price) return Alert.alert("Fejl", "Angiv en pris for dit bud.");
+
     setSaving(true);
     try {
-      await updateServiceRequest(job.id, {
-        status: "claimed",
-        acceptedBy: user.uid,
-        acceptedAt: serverTimestamp(),
-      });
-      await reload();
-      Alert.alert("Job taget", "Service request er nu din.");
-    } catch (e) {
-      Alert.alert("Fejl", "Kunne ikke tage opgaven. " + (e?.message || ""));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function onStart() {
-    if (!(iAmProvider && (isClaimed || isOpen))) return;
-    setSaving(true);
-    try {
-      await updateServiceRequest(job.id, {
-        status: "in_progress",
-        startedAt: serverTimestamp(),
-        acceptedBy: job?.acceptedBy || user.uid,
-        acceptedAt: job?.acceptedAt || serverTimestamp(),
-      });
+      await addBid(job.id, user.uid, price, message);
+      Alert.alert("Bud sendt", "Dit bud er blevet sendt.");
+      setPrice("");
+      setMessage("");
       await reload();
     } catch (e) {
-      Alert.alert("Fejl", "Kunne ikke starte arbejdet. " + (e?.message || ""));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function onComplete() {
-    if (!(iAmProvider && (isClaimed || inProgress))) return;
-    setSaving(true);
-    try {
-      await updateServiceRequest(job.id, {
-        status: "completed",
-        completedAt: serverTimestamp(),
-        acceptedBy: job?.acceptedBy || user.uid,
-        acceptedAt: job?.acceptedAt || serverTimestamp(),
-      });
-      await reload();
-      Alert.alert("Afsluttet", "Opgaven er markeret som færdig.");
-    } catch (e) {
-      Alert.alert("Fejl", "Kunne ikke afslutte opgaven. " + (e?.message || ""));
+      Alert.alert("Fejl", "Kunne ikke afgive bud. " + (e?.message || ""));
     } finally {
       setSaving(false);
     }
@@ -134,9 +117,7 @@ export default function JobDetailScreen() {
     return (
       <View style={styles.loader}>
         <ActivityIndicator />
-        <Text style={styles.loaderText}>
-          Henter service request…
-        </Text>
+        <Text style={styles.loaderText}>Henter service request…</Text>
       </View>
     );
   }
@@ -145,23 +126,22 @@ export default function JobDetailScreen() {
     return (
       <View style={styles.notFound}>
         <Text style={styles.notFoundTitle}>Ikke fundet</Text>
-        <Text style={styles.notFoundText}>
-          Prøv at gå tilbage til oversigten.
-        </Text>
+        <Text style={styles.notFoundText}>Prøv at gå tilbage til oversigten.</Text>
       </View>
     );
   }
 
   const statusBadge = (() => {
     const s = rawStatus || "ukendt";
-    if (isCompleted)
-      return <Text style={styles.badgeCompleted}>{s}</Text>;
-    if (inProgress)
-      return <Text style={styles.badgeInProgress}>{s}</Text>;
-    if (isClaimed)
-      return <Text style={styles.badgeClaimed}>{s}</Text>;
-    return <Text style={styles.badgeDefault}>{s}</Text>;
+    if (isCompleted) return <Text style={styles.badgeCompleted}>{s}</Text>;
+    if (isOpen) return <Text style={styles.badgeDefault}>{s}</Text>;
+    return <Text style={styles.badgeClaimed}>{s}</Text>;
   })();
+
+  // Filtrer bids så owner ser alle, men provider ser sine egne
+  const visibleBids = iAmOwner
+    ? bids
+    : bids.filter((b) => b.provider_id === user?.uid);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
@@ -182,59 +162,74 @@ export default function JobDetailScreen() {
           </View>
         ) : null}
 
-        {job.boat_id ? (
+        {boat ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Båd</Text>
-            <Text style={styles.sectionText}>ID: {job.boat_id}</Text>
+            <Text style={styles.sectionText}>{boat.name}</Text>
+          </View>
+        ) : null}
+
+        {job.budget ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Budget</Text>
+            <Text style={styles.sectionText}>{DKK(job.budget)}</Text>
           </View>
         ) : null}
       </View>
 
       <View style={styles.spacer} />
 
-      {isOpen && (
-        <TouchableOpacity
-          disabled={saving}
-          onPress={onClaim}
-          style={styles.btnPrimary}
-        >
-          <Text style={styles.btnPrimaryText}>
-            {saving ? "Udfører…" : "Tag opgaven"}
-          </Text>
-        </TouchableOpacity>
-      )}
+      {/* Bud-form til providers */}
+      {isOpen && !isCompleted && !iAmOwner && (
+        <View style={styles.bidBox}>
+          <Text style={styles.sectionTitle}>Afgiv dit bud</Text>
 
-      {iAmProvider && !isCompleted && (
-        <View style={styles.actionGroup}>
-          {(isClaimed || isOpen) && (
-            <TouchableOpacity
-              disabled={saving}
-              onPress={onStart}
-              style={styles.btnWarn}
-            >
-              <Text style={styles.btnText}>
-                {saving ? "Starter…" : "Start arbejde"}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TextInput
+            style={styles.input}
+            placeholder="Pris (DKK)"
+            keyboardType="numeric"
+            value={price}
+            onChangeText={setPrice}
+          />
+
+          <TextInput
+            style={[styles.input, { height: 80 }]}
+            placeholder="Besked til ejeren"
+            multiline
+            value={message}
+            onChangeText={setMessage}
+          />
 
           <TouchableOpacity
             disabled={saving}
-            onPress={onComplete}
-            style={styles.btnSuccess}
+            onPress={onBid}
+            style={styles.btnPrimary}
           >
-            <Text style={styles.btnText}>
-              {saving ? "Afslutter…" : "Afslut opgave"}
+            <Text style={styles.btnPrimaryText}>
+              {saving ? "Sender…" : "Byd på opgaven"}
             </Text>
           </TouchableOpacity>
         </View>
       )}
 
+      {/* Budliste */}
+      {visibleBids.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            {iAmOwner ? "Modtagne bud" : "Mine bud"}
+          </Text>
+          {visibleBids.map((b) => (
+            <View key={b.id} style={styles.bidItem}>
+              <Text style={styles.bidPrice}>{DKK(b.price)}</Text>
+              {b.message ? <Text style={styles.bidMessage}>{b.message}</Text> : null}
+            </View>
+          ))}
+        </View>
+      )}
+
       {isCompleted && (
         <View style={styles.completedBox}>
-          <Text style={styles.completedText}>
-            Opgaven er afsluttet
-          </Text>
+          <Text style={styles.completedText}>Opgaven er afsluttet</Text>
         </View>
       )}
     </ScrollView>

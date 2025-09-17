@@ -29,9 +29,9 @@ export async function getBoats(ownerId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-/** Hent en enkelt båd */
 export async function getBoat(ownerId, boatId) {
-  const snap = await getDoc(doc(db, "owners", ownerId, "boats", boatId));
+  const ref = doc(db, "owners", ownerId, "boats", boatId);
+  const snap = await getDoc(ref);
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
