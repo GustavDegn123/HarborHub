@@ -4,12 +4,14 @@ import { View, Text, TextInput, TouchableOpacity, Image, Alert } from "react-nat
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
+import * as Linking from "expo-linking";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../firebase";
+import { auth, db } from "../../firebase";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { firebaseGoogleLogin } from "../../services/authService";
 import Constants from "expo-constants";
+import { useCriiptoVerify } from "@criipto/verify-expo";
 
-// styles
 import styles from "../../styles/shared/loginStyles";
 
 // Sørger for at Google redirect ikke hænger
@@ -19,19 +21,22 @@ export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Google login config
+  /* ---------------- Google login ---------------- */
   const [request, response, promptAsync] = Google.useAuthRequest({
-    expoClientId: "16622525056-qcgjdv8gkbunfgv4c8g79qm0brnjvoj5.apps.googleusercontent.com",
-    iosClientId: "16622525056-7pgliodrdtnruh16cobp7kjb8h838g58.apps.googleusercontent.com",
-    androidClientId: "16622525056-3j94ogkp9q6gs2bn0p1q2q50iv9dt0q1.apps.googleusercontent.com",
-    webClientId: "16622525056-i5cbljlogf92qbdc505gcbrn8cne8r48.apps.googleusercontent.com",
+    expoClientId:
+      "16622525056-qcgjdv8gkbunfgv4c8g79qm0brnjvoj5.apps.googleusercontent.com",
+    iosClientId:
+      "16622525056-7pgliodrdtnruh16cobp7kjb8h838g58.apps.googleusercontent.com",
+    androidClientId:
+      "16622525056-3j94ogkp9q6gs2bn0p1q2q50iv9dt0q1.apps.googleusercontent.com",
+    webClientId:
+      "16622525056-i5cbljlogf92qbdc505gcbrn8cne8r48.apps.googleusercontent.com",
     redirectUri: makeRedirectUri({
       scheme: "harborhub",
-      useProxy: Constants.appOwnership === "expo", // virker i Expo Go
+      useProxy: Constants.appOwnership === "expo", // Expo Go
     }),
   });
 
-  // Google login response
   useEffect(() => {
     if (response?.type === "success") {
       const { id_token } = response.params;
@@ -46,6 +51,9 @@ export default function LoginScreen({ navigation }) {
     }
   }, [response]);
 
+  /* ---------------- Criipto Verify (MitID) ---------------- */
+  const { login: mitIdLogin, claims, error: mitIdError } = useCriiptoVerify();
+
   // Email login
   const handleEmailLogin = async () => {
     try {
@@ -57,18 +65,93 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
+  // MitID login
+  const handleMitIDLogin = async () => {
+    // Vælg redirectUri dynamisk:
+    // - I Expo Go: exp://<ip>:8081/--/auth/callback (skifter ofte)
+    // - I dev-client/builds: harborhub://auth/callback (stabil)
+    const redirectUri =
+      Constants.appOwnership === "expo"
+        ? Linking.createURL("/auth/callback")
+        : makeRedirectUri({ scheme: "harborhub", path: "auth/callback" });
+
+    console.log("Criipto redirectUri:", redirectUri);
+
+    // ACR for MitID (substantial er typisk kravet)
+    const acr = "urn:grn:authn:dk:mitid:substantial";
+
+    try {
+      const result = await mitIdLogin(acr, redirectUri);
+      // claims kan komme fra hook eller fra result afhængigt af lib-version
+      const c = claims || result?.claims || result || {};
+
+      if (auth.currentUser) {
+        await setDoc(
+          doc(db, "users", auth.currentUser.uid),
+          {
+            mitidSub: c?.sub || null,                // unik MitID identifikator
+            mitidAmr: Array.isArray(c?.amr) ? c.amr : [],
+            mitidUpdatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+        Alert.alert("MitID", "✅ MitID er tilknyttet din konto.");
+      } else {
+        Alert.alert(
+          "MitID",
+          "✅ MitID godkendt. Log ind (fx e-mail/Google) for at tilknytte MitID til din konto."
+        );
+      }
+    } catch (e) {
+      // iOS "cancel" error (ASWebAuthenticationSession error 1) håndteres pænt
+      const msg = String(e?.message || e);
+      console.error("MitID login fejl:", e);
+
+      if (msg.includes("WebAuthenticationSession") || msg.toLowerCase().includes("cancel")) {
+        Alert.alert(
+          "Login afbrudt",
+          "MitID-login blev afbrudt. Prøv igen og bliv i browseren til du sendes tilbage til appen."
+        );
+      } else {
+        Alert.alert(
+          "MitID fejl",
+          `${msg}\n\nTjek at denne redirect-URL er whitelisted i Criipto:\n${redirectUri}`
+        );
+      }
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Logo */}
       <Image source={require("../../assets/logo.png")} style={styles.logoImage} />
 
-      {/* Apple Login */}
-      <TouchableOpacity style={[styles.socialButton, styles.appleButton]} onPress={() => Alert.alert("Apple login", "Ikke implementeret endnu.")}>
+      {/* MitID (Criipto Verify) */}
+      <TouchableOpacity
+        style={[styles.socialButton, { backgroundColor: "#0A84FF" }]}
+        onPress={handleMitIDLogin}
+      >
+        <Text style={[styles.socialText, { color: "white" }]}>Log ind med MitID</Text>
+      </TouchableOpacity>
+      {mitIdError ? (
+        <Text style={{ color: "red", marginTop: 6 }}>
+          MitID fejl: {String(mitIdError)}
+        </Text>
+      ) : null}
+
+      {/* Apple Login (placeholder) */}
+      <TouchableOpacity
+        style={[styles.socialButton, styles.appleButton]}
+        onPress={() => Alert.alert("Apple login", "Ikke implementeret endnu.")}
+      >
         <Text style={styles.appleText}> Log ind med Apple</Text>
       </TouchableOpacity>
 
-      {/* Facebook Login */}
-      <TouchableOpacity style={[styles.socialButton, styles.facebookButton]} onPress={() => Alert.alert("Facebook login", "Ikke implementeret endnu.")}>
+      {/* Facebook Login (placeholder) */}
+      <TouchableOpacity
+        style={[styles.socialButton, styles.facebookButton]}
+        onPress={() => Alert.alert("Facebook login", "Ikke implementeret endnu.")}
+      >
         <View style={styles.socialContent}>
           <Image source={require("../../assets/facebook.png")} style={styles.icon} />
           <Text style={styles.socialText}>Facebook</Text>
@@ -120,8 +203,8 @@ export default function LoginScreen({ navigation }) {
 
       {/* Links */}
       <TouchableOpacity onPress={() => navigation.navigate("PasswordReset")}>
-  <Text style={styles.forgotPassword}>Glemt adgangskode?</Text>
-</TouchableOpacity>
+        <Text style={styles.forgotPassword}>Glemt adgangskode?</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity onPress={() => navigation.navigate("SignUp")}>
         <Text style={styles.signUpText}>
