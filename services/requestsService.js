@@ -636,16 +636,77 @@ export function listenOwnerRequestsSafe(ownerId, callback, errorCallback) {
   );
 }
 
+export async function markJobPaid(jobId, amountMinor) {
+  if (!jobId) return;
+
+  const jobRef = doc(db, "service_requests", jobId);
+  const jobSnap = await getDoc(jobRef);
+  if (!jobSnap.exists()) return;
+
+  const data = jobSnap.data();
+  const providerId = data.acceptedProviderId || null;
+
+  await updateDoc(jobRef, {
+    status: "paid",
+    paid: true,
+    paidAt: serverTimestamp(),
+    payment: {
+      ...(data.payment || {}),
+      clientMarkedPaid: true,
+      amount: typeof amountMinor === "number" ? amountMinor : null,
+      currency: "dkk",
+      updatedAt: serverTimestamp(),
+    },
+    updated_at: serverTimestamp(),
+  });
+
+  if (providerId) {
+    const assignedRef = doc(db, "providers", providerId, "assigned_jobs", jobId);
+    const assignedSnap = await getDoc(assignedRef);
+    if (assignedSnap.exists()) {
+      await updateDoc(assignedRef, {
+        status: "paid",
+        paid: true,
+        paidAt: serverTimestamp(),
+      });
+    }
+  }
+}
+
+
 /* =========================
    Reviews
 ========================= */
 
-/** Marker at ejer har givet anmeldelse på dette job (så knappen kan skjules) */
+/** Marker at ejer har givet anmeldelse på dette job */
 export async function markJobReviewed(jobId) {
   if (!jobId) return;
-  await updateDoc(doc(db, "service_requests", jobId), {
+
+  const jobRef = doc(db, "service_requests", jobId);
+  const jobSnap = await getDoc(jobRef);
+  if (!jobSnap.exists()) return;
+
+  const data = jobSnap.data();
+  const providerId = data.acceptedProviderId || null;
+
+  // Opdater selve service_request
+  await updateDoc(jobRef, {
+    status: "reviewed",
     reviewGiven: true,
     reviewGivenAt: serverTimestamp(),
     updated_at: serverTimestamp(),
   });
+
+  // Hvis der er en provider → opdater også providerens assigned_jobs
+  if (providerId) {
+    const assignedRef = doc(db, "providers", providerId, "assigned_jobs", jobId);
+    const assignedSnap = await getDoc(assignedRef);
+    if (assignedSnap.exists()) {
+      await updateDoc(assignedRef, {
+        status: "reviewed",
+        reviewGiven: true,
+        reviewGivenAt: serverTimestamp(),
+      });
+    }
+  }
 }
