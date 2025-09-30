@@ -6,7 +6,7 @@ const Stripe = require("stripe");
 admin.initializeApp();
 const db = admin.firestore();
 
-// Init Stripe med secret
+// Init Stripe
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY || "");
 
 /**
@@ -65,11 +65,13 @@ exports.stripeWebhook = functions.onRequest(
         logger.info("✅ PaymentIntent succeeded:", paymentIntent.id);
 
         const { jobId, mechanicId, ownerId } = paymentIntent.metadata || {};
+        const grossAmount = paymentIntent.amount_received; // i øre
+        const netAmount = Math.round(grossAmount * 0.9);
 
         // Gem betaling i "payments"
         await db.collection("payments").doc(paymentIntent.id).set({
           status: "succeeded",
-          amount: paymentIntent.amount_received,
+          amount: grossAmount,
           currency: paymentIntent.currency,
           jobId: jobId || null,
           mechanicId: mechanicId || null,
@@ -77,19 +79,36 @@ exports.stripeWebhook = functions.onRequest(
           createdAt: admin.firestore.Timestamp.now(),
         });
 
+        // Opret payout til mekaniker
+        if (mechanicId) {
+          const payoutRef = db
+            .collection("providers")
+            .doc(mechanicId)
+            .collection("payouts")
+            .doc(paymentIntent.id);
+          await payoutRef.set({
+            amount: netAmount,
+            currency: paymentIntent.currency,
+            jobId: jobId || null,
+            paymentIntentId: paymentIntent.id,
+            createdAt: admin.firestore.Timestamp.now(),
+          });
+          logger.info(
+            `💸 Payout til provider ${mechanicId}: ${netAmount} ${paymentIntent.currency}`
+          );
+        }
+
         // Opdater job → status: "paid"
         if (jobId) {
-          await db.collection("service_requests").doc(jobId).set(
-            {
-              status: "paid",
-              payment: {
-                succeededAt: admin.firestore.Timestamp.now(),
-                paymentIntentId: paymentIntent.id,
-                amount: paymentIntent.amount_received,
-              },
+          await db.collection("service_requests").doc(jobId).update({
+            status: "paid",
+            payment: {
+              succeededAt: admin.firestore.Timestamp.now(),
+              paymentIntentId: paymentIntent.id,
+              grossAmount,
+              netAmount,
             },
-            { merge: true } // ⚡ vigtigt: overskriver ikke andre felter
-          );
+          });
           logger.info(`🔄 Job ${jobId} sat til "paid"`);
         }
 

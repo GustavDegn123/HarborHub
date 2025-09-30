@@ -51,30 +51,22 @@ export default function OwnerAssignedScreen() {
     return () => unsub && unsub();
   }, [uid]);
 
-  const onRefresh = useCallback(async () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 500);
   }, []);
 
-  // Split i aktive og afsluttede jobs
   const { active, completed } = useMemo(() => {
     const act = [];
     const done = [];
-
     for (const r of items) {
-      const status = String(r.status || "").toLowerCase();
-
-      if (status === "paid") {
-        // Når betalt → vis under afsluttede
+      const s = String(r.status || "").toLowerCase();
+      if (s === "completed" || s === "done" || s === "closed" || s === "paid") {
         done.push(r);
-      } else if (status === "completed" || status === "done" || status === "closed") {
-        // completed → også afsluttet (men helst skift til paid via webhook)
-        done.push(r);
-      } else if (status !== "open") {
-        act.push(r); // assigned, in_progress, etc.
+      } else if (s !== "open") {
+        act.push(r);
       }
     }
-
     const getMs = (x) =>
       x?.updated_at?.toMillis?.() ??
       x?.acceptedAt?.toMillis?.() ??
@@ -82,7 +74,6 @@ export default function OwnerAssignedScreen() {
       0;
     act.sort((a, b) => getMs(b) - getMs(a));
     done.sort((a, b) => getMs(b) - getMs(a));
-
     return { active: act, completed: done };
   }, [items]);
 
@@ -114,15 +105,17 @@ export default function OwnerAssignedScreen() {
   function goToPayment(job) {
     try {
       const providerId = job?.acceptedProviderId;
-      const amount = Number(job?.acceptedPrice || 0);
+      const amount = typeof job?.acceptedPrice === "number"
+        ? job.acceptedPrice
+        : Number(job?.acceptedPrice || 0);
       if (!providerId || !Number.isFinite(amount) || amount <= 0) {
         return Alert.alert("Manglende info", "Betaling kan ikke åbnes – mangler pris eller mekaniker.");
       }
       navigation.navigate("OwnerCheckout", {
         jobId: job.id,
         providerId,
-        ownerId: job.owner_id,
         amount,
+        ownerId: job.owner_id,
       });
     } catch (e) {
       Alert.alert("Fejl", e?.message || "Kunne ikke åbne betaling.");
@@ -132,7 +125,11 @@ export default function OwnerAssignedScreen() {
   function openReview(job) {
     const status = String(job.status || "").toLowerCase();
     const isPaid = status === "paid" || !!job?.payment?.succeededAt;
-    const canReview = isPaid && !!job.acceptedProviderId && !job.reviewGiven;
+    const canReview =
+      status === "completed" &&
+      isPaid &&
+      !!job.acceptedProviderId &&
+      !job.reviewGiven;
 
     if (!canReview) {
       return Alert.alert("Ikke klar", "Denne opgave kan ikke anmeldes endnu.");
@@ -176,7 +173,6 @@ export default function OwnerAssignedScreen() {
   const JobCard = ({ job, showReviewButton = false }) => {
     const img = job.image || job.imageUrl || job.imageURL || job.photoURL || null;
     const status = String(job.status || "").toLowerCase();
-
     const isPaid = status === "paid" || !!job?.payment?.succeededAt;
 
     const canPay =
@@ -187,7 +183,11 @@ export default function OwnerAssignedScreen() {
       Number(job?.acceptedPrice) > 0;
 
     const canReview =
-      showReviewButton && isPaid && !!job.acceptedProviderId && !job.reviewGiven;
+      showReviewButton &&
+      status === "completed" &&
+      isPaid &&
+      !!job.acceptedProviderId &&
+      !job.reviewGiven;
 
     return (
       <View
@@ -213,13 +213,56 @@ export default function OwnerAssignedScreen() {
           <StatusPill status={job.status} />
         </View>
 
+        {/* Betaling-badge */}
+        {isPaid && (
+          <View
+            style={{
+              alignSelf: "flex-start",
+              backgroundColor: "#DBEAFE",
+              borderRadius: 8,
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              marginBottom: 6,
+            }}
+          >
+            <Text style={{ color: "#1D4ED8", fontWeight: "600", fontSize: 12 }}>
+              Betaling registreret
+            </Text>
+          </View>
+        )}
+
+        {/* Anmeldt-badge */}
+        {job.reviewGiven && (
+          <View
+            style={{
+              alignSelf: "flex-start",
+              backgroundColor: "#DCFCE7",
+              borderRadius: 8,
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              marginBottom: 6,
+            }}
+          >
+            <Text style={{ color: "#047857", fontWeight: "600", fontSize: 12 }}>
+              Anmeldt
+            </Text>
+          </View>
+        )}
+
         {job.description ? (
           <Text style={{ color: "#6B7280" }} numberOfLines={2}>
             {job.description}
           </Text>
         ) : null}
 
-        <View style={{ flexDirection: "row", gap: 12, marginTop: 8, alignItems: "center" }}>
+        <View
+          style={{
+            flexDirection: "row",
+            gap: 12,
+            marginTop: 8,
+            alignItems: "center",
+          }}
+        >
           {typeof job.acceptedPrice === "number" && (
             <Text style={{ fontWeight: "600" }}>{DKK(job.acceptedPrice)}</Text>
           )}
@@ -230,11 +273,15 @@ export default function OwnerAssignedScreen() {
           )}
         </View>
 
-        {img ? (
+        {img && (
           <View style={{ marginTop: 10, borderRadius: 10, overflow: "hidden" }}>
-            <Image source={{ uri: img }} style={{ width: "100%", height: 120 }} resizeMode="cover" />
+            <Image
+              source={{ uri: img }}
+              style={{ width: "100%", height: 120 }}
+              resizeMode="cover"
+            />
           </View>
-        ) : null}
+        )}
 
         <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
           <TouchableOpacity
@@ -292,7 +339,9 @@ export default function OwnerAssignedScreen() {
               alignItems: "center",
             }}
           >
-            <Text style={{ color: "white", fontWeight: "700" }}>Anmeld mekaniker</Text>
+            <Text style={{ color: "white", fontWeight: "700" }}>
+              Anmeld mekaniker
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -316,12 +365,26 @@ export default function OwnerAssignedScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <Text style={{ fontSize: 22, fontWeight: "800" }}>Mine igangværende opgaver</Text>
+      <Text style={{ fontSize: 22, fontWeight: "800" }}>
+        Mine igangværende opgaver
+      </Text>
 
-      <Text style={{ marginTop: 4, fontWeight: "700", fontSize: 16 }}>Aktive</Text>
+      <Text style={{ marginTop: 4, fontWeight: "700", fontSize: 16 }}>
+        Aktive
+      </Text>
       {active.length === 0 ? (
-        <View style={{ borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 12, padding: 16, backgroundColor: "#F9FAFB" }}>
-          <Text style={{ color: "#6B7280" }}>Du har ingen aktive opgaver lige nu.</Text>
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: "#E5E7EB",
+            borderRadius: 12,
+            padding: 16,
+            backgroundColor: "#F9FAFB",
+          }}
+        >
+          <Text style={{ color: "#6B7280" }}>
+            Du har ingen aktive opgaver lige nu.
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -333,10 +396,22 @@ export default function OwnerAssignedScreen() {
         />
       )}
 
-      <Text style={{ marginTop: 16, fontWeight: "700", fontSize: 16 }}>Afsluttede</Text>
+      <Text style={{ marginTop: 16, fontWeight: "700", fontSize: 16 }}>
+        Afsluttede
+      </Text>
       {completed.length === 0 ? (
-        <View style={{ borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 12, padding: 16, backgroundColor: "#F9FAFB" }}>
-          <Text style={{ color: "#6B7280" }}>Du har ingen afsluttede opgaver endnu.</Text>
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: "#E5E7EB",
+            borderRadius: 12,
+            padding: 16,
+            backgroundColor: "#F9FAFB",
+          }}
+        >
+          <Text style={{ color: "#6B7280" }}>
+            Du har ingen afsluttede opgaver endnu.
+          </Text>
         </View>
       ) : (
         <FlatList

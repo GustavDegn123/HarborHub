@@ -32,8 +32,11 @@ import RequestBidsScreen from "./components/boatowners/RequestBidsScreen";
 import BoatProfileScreen from "./components/boatowners/BoatProfileScreen";
 import OwnerAssignedScreen from "./components/boatowners/OwnerAssignedScreen";
 import LeaveReviewScreen from "./components/boatowners/LeaveReviewScreen";
+import OwnerTabs from "./components/boatowners/OwnerTabs";
+
 /* Betaling */
 import OwnerCheckoutScreen from "./components/payments/OwnerCheckoutScreen";
+
 
 /* Provider (mechanic) screens */
 import ProviderHomeScreen from "./components/mechanics/ProviderHomeScreen";
@@ -101,11 +104,14 @@ export default function App() {
             {user ? (
               user.role === "owner" ? (
                 <>
+                                    {/* Tabs er root for bådejere */}
                   <Stack.Screen
-                    name="OwnerHome"
-                    component={OwnerHomeScreen}
-                    options={{ title: "HarborHub" }}
+                    name="OwnerRoot"
+                    component={OwnerTabs}
+                    options={{ headerShown: false }}
                   />
+
+                  {/* Skærme der åbnes fra tabs/menu */}
                   <Stack.Screen
                     name="BoatForm"
                     component={BoatFormScreen}
@@ -145,6 +151,12 @@ export default function App() {
                     name="OwnerAssigned"
                     component={OwnerAssignedScreen}
                     options={{ title: "Mine igangværende opgaver" }}
+                  />
+                  {/* 👇 Tilføjet så ejere også kan åbne jobdetaljer */}
+                  <Stack.Screen
+                    name="JobDetail"
+                    component={JobDetailScreen}
+                    options={{ title: "Jobdetaljer" }}
                   />
                   <Stack.Screen
                     name="OwnerCheckout"

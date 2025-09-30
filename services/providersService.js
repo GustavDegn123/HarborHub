@@ -1,4 +1,3 @@
-// /services/providersService.js
 import { db } from "../firebase";
 import {
   doc,
@@ -71,7 +70,7 @@ export async function getAvailableServices() {
 }
 
 /* =========================
-   (Legacy) Jobs-hjælpere – beholdt hvis du stadig bruger "jobs"
+   (Legacy) Jobs-hjælpere
 ========================= */
 export async function getProviderJobs(uid, max = 100) {
   if (!uid) return [];
@@ -94,8 +93,7 @@ export function listenProviderJobs(uid, callback, errorCallback) {
   return onSnapshot(
     qRef,
     (snap) => {
-      const jobs = [];
-      snap.forEach((d) => jobs.push({ id: d.id, ...d.data() }));
+      const jobs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       jobs.sort(
         (a, b) =>
           (b?.createdAt?.toMillis?.() || 0) -
@@ -108,18 +106,41 @@ export function listenProviderJobs(uid, callback, errorCallback) {
 }
 
 /* =========================
-   Payouts (hvis du bruger separat udbetalingssamling)
+   Payouts (udbetalinger)
 ========================= */
+
+/** Engangslæsning */
 export async function getProviderPayouts(uid, max = 50) {
   if (!uid) return [];
-  const qRef = query(collection(db, "providers", uid, "payouts"), limit(max));
+  const qRef = query(
+    collection(db, "providers", uid, "payouts"),
+    orderBy("createdAt", "desc"),
+    limit(max)
+  );
   const snap = await getDocs(qRef);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+/** Live-lyt */
+export function listenProviderPayouts(uid, callback, errorCallback) {
+  if (!uid) return () => {};
+  const qRef = query(
+    collection(db, "providers", uid, "payouts"),
+    orderBy("createdAt", "desc"),
+    limit(200)
+  );
+  return onSnapshot(
+    qRef,
+    (snap) => {
+      const payouts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback(payouts);
+    },
+    errorCallback
+  );
+}
+
 /* =========================
-   Reviews (providers/{providerId}/reviews)
-   – aggregatfelter på providers-doc: ratingSum, ratingCount
+   Reviews
 ========================= */
 
 export async function addProviderReview({
@@ -155,13 +176,11 @@ export async function addProviderReview({
   const provRef = doc(db, "providers", providerId);
 
   if (!existed) {
-    // første review for denne kombination → øg sum og count
     await updateDoc(provRef, {
       ratingSum: increment(stars),
       ratingCount: increment(1),
       ratingUpdatedAt: serverTimestamp(),
     }).catch(async () => {
-      // hvis provider-doc ikke fandtes, initialiser
       await setDoc(
         provRef,
         {
@@ -176,7 +195,6 @@ export async function addProviderReview({
   return true;
 }
 
-/** Hent provider-reviews (subcollection) – nyeste først */
 export async function getProviderReviews(uid, max = 50) {
   if (!uid) return [];
   const qRef = query(
@@ -188,7 +206,6 @@ export async function getProviderReviews(uid, max = 50) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-/** Live-lyt provider-reviews (subcollection) – nyeste først */
 export function listenProviderReviews(uid, callback, errorCallback) {
   if (!uid) return () => {};
   const qRef = query(
@@ -199,8 +216,7 @@ export function listenProviderReviews(uid, callback, errorCallback) {
   return onSnapshot(
     qRef,
     (snap) => {
-      const reviews = [];
-      snap.forEach((d) => reviews.push({ id: d.id, ...d.data() }));
+      const reviews = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       callback(
         reviews.sort(
           (a, b) =>
@@ -213,46 +229,14 @@ export function listenProviderReviews(uid, callback, errorCallback) {
   );
 }
 
-/** Beregn gennemsnit fra provider-doc felter */
-export function calcProviderAvgFromDoc(providerDoc) {
-  const sum = Number(providerDoc?.ratingSum || 0);
-  const cnt = Number(providerDoc?.ratingCount || 0);
-  if (cnt <= 0) return { avg: 0, count: 0 };
-  return { avg: sum / cnt, count: cnt };
-}
-
-/** Hent gennemsnit direkte fra provider-doc (hurtigt) */
-export async function getProviderAverage(uid) {
-  if (!uid) return { avg: 0, count: 0 };
-  const snap = await getDoc(doc(db, "providers", uid));
-  if (!snap.exists()) return { avg: 0, count: 0 };
-  return calcProviderAvgFromDoc(snap.data());
-}
-
 /* =========================
-   Public summary til budlister m.m.
+   Public summary til budlister
 ========================= */
 
-/** Helper: lav et visningsnavn */
 export function pickProviderDisplayName(p) {
-  return (
-    p?.companyName ||
-    p?.displayName ||
-    p?.email ||
-    "Ukendt udbyder"
-  );
+  return p?.companyName || p?.displayName || p?.email || "Ukendt udbyder";
 }
 
-/**
- * Offentligt sammendrag til visning i budlister m.m.
- * Returnerer: { displayName, companyName, email, services, avgRating, reviewCount }
- * Hvis rating-felter mangler på provider-doc, beregnes de fra reviews og caches.
- */
-/**
- * Offentligt sammendrag til budlister.
- * Returnerer: { displayName, companyName, email, services, avgRating, reviewCount }
- * Fallback: henter også users/{providerId} hvis providers/{providerId} mangler navn.
- */
 export async function getProviderPublicSummary(providerId) {
   if (!providerId) return null;
 
@@ -260,14 +244,12 @@ export async function getProviderPublicSummary(providerId) {
   const psnap = await getDoc(pref);
   const pdata = psnap.exists() ? (psnap.data() || {}) : {};
 
-  // Fallback til users/{providerId}
   let udata = null;
   try {
     const usnap = await getDoc(doc(db, "users", providerId));
     if (usnap.exists()) udata = usnap.data() || null;
   } catch {}
 
-  // Navn/e-mail i prioriteret rækkefølge
   const companyName = pdata.companyName ?? pdata.company ?? null;
   const displayName =
     pdata.displayName ??
@@ -277,7 +259,6 @@ export async function getProviderPublicSummary(providerId) {
     null;
   const email = pdata.email ?? udata?.email ?? null;
 
-  // Rating: brug cachefelter → sum/count → ellers beregn fra reviews
   let avg = typeof pdata.avgRating === "number" ? pdata.avgRating : undefined;
   let count = typeof pdata.reviewCount === "number" ? pdata.reviewCount : undefined;
 
@@ -296,7 +277,10 @@ export async function getProviderPublicSummary(providerId) {
     let s = 0, c = 0;
     rsnap.forEach((d) => {
       const r = d.data()?.rating;
-      if (typeof r === "number" && isFinite(r)) { s += r; c += 1; }
+      if (typeof r === "number" && isFinite(r)) {
+        s += r;
+        c += 1;
+      }
     });
     avg = c > 0 ? s / c : 0;
     count = c;
@@ -327,24 +311,15 @@ export async function getProviderPublicSummary(providerId) {
 }
 
 /* =========================
-   Earnings (indtjening) – udfyldes af Stripe-webhook
+   Earnings
 ========================= */
 
-/**
- * Engangslæsning: samlet indtjening (providers/{id}/earnings/summary)
- * Forventede felter:
- *  - totalEarnedMinor: number (øre)
- *  - totalEarned: number (DKK)
- *  - jobsPaid: number
- *  - updatedAt: Timestamp
- */
 export async function getProviderEarningsSummary(providerId) {
   if (!providerId) return null;
   const snap = await getDoc(doc(db, `providers/${providerId}/earnings/summary`));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/** Live-lyt: samlet indtjening for provider */
 export function listenProviderEarningsSummary(providerId, callback, errorCallback) {
   if (!providerId) return () => {};
   const ref = doc(db, `providers/${providerId}/earnings/summary`);
@@ -355,11 +330,6 @@ export function listenProviderEarningsSummary(providerId, callback, errorCallbac
   );
 }
 
-/**
- * Detaljer pr. job (providers/{id}/earnings_by_job) – nyeste først.
- * Forventede felter pr. doc:
- *  - jobId, amountMinor, amount, currency, createdAt
- */
 export async function getProviderEarningsByJob(providerId, max = 100) {
   if (!providerId) return [];
   const qRef = query(
@@ -371,7 +341,6 @@ export async function getProviderEarningsByJob(providerId, max = 100) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-/** Live-lyt: detaljer pr. job (nyeste først) */
 export function listenProviderEarningsByJob(providerId, callback, errorCallback) {
   if (!providerId) return () => {};
   const qRef = query(

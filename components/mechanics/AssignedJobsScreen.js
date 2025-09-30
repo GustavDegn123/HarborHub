@@ -1,15 +1,30 @@
 // /components/mechanics/AssignedJobsScreen.js
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, Alert } from "react-native";
+import {
+  View,
+  Text,
+  FlatList,
+  ActivityIndicator,
+  TouchableOpacity,
+  Alert,
+} from "react-native";
 import { getAuth } from "firebase/auth";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import styles from "../../styles/mechanics/jobsFeedStyles";
-import { startAssignedJob, completeAssignedJob, cancelAssignedJob } from "../../services/requestsService";
+import {
+  startAssignedJob,
+  completeAssignedJob,
+  cancelAssignedJob,
+} from "../../services/requestsService";
 
 const DKK = (n) =>
   typeof n === "number"
-    ? new Intl.NumberFormat("da-DK", { style: "currency", currency: "DKK", maximumFractionDigits: 0 }).format(n)
+    ? new Intl.NumberFormat("da-DK", {
+        style: "currency",
+        currency: "DKK",
+        maximumFractionDigits: 0,
+      }).format(n)
     : "—";
 
 export default function AssignedJobsScreen({ navigation }) {
@@ -17,13 +32,15 @@ export default function AssignedJobsScreen({ navigation }) {
   const uid = auth.currentUser?.uid;
 
   const [loading, setLoading] = useState(true);
-  const [jobs, setJobs] = useState([]);      // alle tildelte jobs (uanset status)
-  const [busyId, setBusyId] = useState(null); // disable knapper pr job
+  const [jobs, setJobs] = useState([]); // alle tildelte jobs
+  const [busyId, setBusyId] = useState(null);
 
   useEffect(() => {
     if (!uid) return;
-    // Lyt live på jobs hvor jeg er tildelt
-    const qRef = query(collection(db, "service_requests"), where("acceptedProviderId", "==", uid));
+    const qRef = query(
+      collection(db, "service_requests"),
+      where("acceptedProviderId", "==", uid)
+    );
     const unsub = onSnapshot(
       qRef,
       (snap) => {
@@ -40,9 +57,13 @@ export default function AssignedJobsScreen({ navigation }) {
     return () => unsub();
   }, [uid]);
 
-  // 👇 Vis KUN jobs der endnu ikke er startet
-  const onlyAssigned = useMemo(
-    () => jobs.filter((j) => String(j.status || "").toLowerCase() === "assigned"),
+  // 👇 Vis både assigned + in_progress
+  const visibleJobs = useMemo(
+    () =>
+      jobs.filter((j) => {
+        const s = String(j.status || "").toLowerCase();
+        return s === "assigned" || s === "in_progress";
+      }),
     [jobs]
   );
 
@@ -50,7 +71,6 @@ export default function AssignedJobsScreen({ navigation }) {
     try {
       setBusyId(job.id);
       await startAssignedJob(job.id, uid);
-      // Når status bliver "in_progress" fjerner live-listen selv job’et fra denne visning
     } catch (e) {
       Alert.alert("Fejl", e?.message || "Kunne ikke starte opgaven.");
     } finally {
@@ -62,7 +82,6 @@ export default function AssignedJobsScreen({ navigation }) {
     try {
       setBusyId(job.id);
       await completeAssignedJob(job.id, uid);
-      // Her ryger den også ud af listen (status "completed")
     } catch (e) {
       Alert.alert("Fejl", e?.message || "Kunne ikke afslutte opgaven.");
     } finally {
@@ -74,7 +93,6 @@ export default function AssignedJobsScreen({ navigation }) {
     try {
       setBusyId(job.id);
       await cancelAssignedJob(job.id, uid);
-      // Nu bliver jobbet åbent igen (status "open") og forsvinder herfra
     } catch (e) {
       Alert.alert("Fejl", e?.message || "Kunne ikke annullere opgaven.");
     } finally {
@@ -93,62 +111,92 @@ export default function AssignedJobsScreen({ navigation }) {
 
   return (
     <View style={styles.screen}>
-      {onlyAssigned.length === 0 ? (
+      {visibleJobs.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>Ingen opgaver i kø</Text>
-          <Text style={styles.emptySubtitle}>Når du accepteres til en opgave, vises den her indtil du starter.</Text>
+          <Text style={styles.emptyTitle}>Ingen opgaver</Text>
+          <Text style={styles.emptySubtitle}>
+            Når du accepteres til en opgave, vises den her indtil den er afsluttet.
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={onlyAssigned}
+          data={visibleJobs}
           keyExtractor={(it) => it.id}
           contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>{item.service_type || "Opgave"}</Text>
-              {item.budget ? <Text style={styles.cardBudget}>{DKK(item.budget)}</Text> : null}
-              {item.description ? <Text style={styles.cardDesc} numberOfLines={2}>{item.description}</Text> : null}
+          renderItem={({ item }) => {
+            const s = String(item.status || "").toLowerCase();
+            return (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>
+                  {item.service_type || "Opgave"}{" "}
+                  {s === "in_progress" ? "⏳ (I gang)" : ""}
+                </Text>
+                {item.budget ? (
+                  <Text style={styles.cardBudget}>{DKK(item.budget)}</Text>
+                ) : null}
+                {item.description ? (
+                  <Text style={styles.cardDesc} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                ) : null}
 
-              <View style={{ height: 8 }} />
+                <View style={{ height: 8 }} />
 
-              <TouchableOpacity
-                style={[styles.btnPrimary, busyId === item.id && { opacity: 0.6 }]}
-                disabled={busyId === item.id}
-                onPress={() => onStart(item)}
-              >
-                <Text style={styles.btnPrimaryText}>{busyId === item.id ? "Starter…" : "Start opgave"}</Text>
-              </TouchableOpacity>
+                {s === "assigned" && (
+                  <TouchableOpacity
+                    style={[
+                      styles.btnPrimary,
+                      busyId === item.id && { opacity: 0.6 },
+                    ]}
+                    disabled={busyId === item.id}
+                    onPress={() => onStart(item)}
+                  >
+                    <Text style={styles.btnPrimaryText}>
+                      {busyId === item.id ? "Starter…" : "Start opgave"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
-              <View style={{ height: 8 }} />
+                {s === "in_progress" && (
+                  <TouchableOpacity
+                    style={[
+                      styles.btnSuccess,
+                      busyId === item.id && { opacity: 0.6 },
+                    ]}
+                    disabled={busyId === item.id}
+                    onPress={() => onComplete(item)}
+                  >
+                    <Text style={styles.btnText}>
+                      {busyId === item.id ? "Afslutter…" : "Afslut opgave"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
-              <TouchableOpacity
-                style={styles.btnSecondary}
-                onPress={() => navigation.navigate("JobDetail", { jobId: item.id })}
-              >
-                <Text style={styles.btnSecondaryText}>Se detaljer</Text>
-              </TouchableOpacity>
+                <View style={{ height: 8 }} />
 
-              <View style={{ height: 8 }} />
-
-              <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity
-                  style={styles.btnWarn}
-                  onPress={() => onCancel(item)}
-                  disabled={busyId === item.id}
+                  style={styles.btnSecondary}
+                  onPress={() =>
+                    navigation.navigate("JobDetail", { jobId: item.id })
+                  }
                 >
-                  <Text style={styles.btnText}>Annullér</Text>
+                  <Text style={styles.btnSecondaryText}>Se detaljer</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.btnSuccess}
-                  onPress={() => onComplete(item)}
-                  disabled={busyId === item.id}
-                >
-                  <Text style={styles.btnText}>Afslut</Text>
-                </TouchableOpacity>
+                <View style={{ height: 8 }} />
+
+                {s !== "completed" && (
+                  <TouchableOpacity
+                    style={styles.btnWarn}
+                    onPress={() => onCancel(item)}
+                    disabled={busyId === item.id}
+                  >
+                    <Text style={styles.btnText}>Annullér</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            </View>
-          )}
+            );
+          }}
         />
       )}
     </View>
