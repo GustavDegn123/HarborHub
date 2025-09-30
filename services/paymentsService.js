@@ -21,7 +21,8 @@ export async function createPaymentIntentForJob({
   ownerId = "",
   description = "HarborHub betaling",
 }) {
-  const payload = { amount, currency, jobId, mechanicId: providerId, ownerId, description };
+  
+  const payload = { amount, currency, jobId, providerId, ownerId, description };
 
   try {
     const res = await fetch(CLOUD_BASE, {

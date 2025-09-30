@@ -8,12 +8,12 @@ const Stripe = require("stripe");
 admin.initializeApp();
 const db = admin.firestore();
 
-// Define runtime secrets (DO NOT read process.env at module load)
+// 🔑 Secrets (defineret i Firebase CLI)
 const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
 const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 /**
- * Small helper to allow POST from your app (and preflight) — optional.
+ * Helper til CORS (kun nødvendigt for createPaymentIntent, ikke webhook)
  */
 function allowCORS(req, res) {
   res.set("Access-Control-Allow-Origin", "*");
@@ -27,7 +27,7 @@ function allowCORS(req, res) {
 }
 
 /**
- * 👉 Create PaymentIntent for a job (hard-fail if required fields missing)
+ * 👉 Create PaymentIntent til et job
  */
 exports.createPaymentIntent = onRequest(
   { region: "us-central1", secrets: [STRIPE_SECRET_KEY] },
@@ -35,12 +35,12 @@ exports.createPaymentIntent = onRequest(
     try {
       if (allowCORS(req, res)) return;
       if (req.method !== "POST") {
-        return res.status(405).send({ error: "Only POST is allowed." });
+        return res.status(405).send({ error: "Kun POST er tilladt." });
       }
 
       const { amount, jobId, providerId, ownerId } = req.body || {};
 
-      // Hard fail on missing inputs
+      // Hard fail hvis noget mangler
       if (
         !Number.isFinite(Number(amount)) ||
         Number(amount) <= 0 ||
@@ -48,30 +48,30 @@ exports.createPaymentIntent = onRequest(
         !providerId ||
         !ownerId
       ) {
-        logger.error("❌ createPaymentIntent: Missing/invalid fields", req.body);
+        logger.error("❌ createPaymentIntent: Mangler/ugyldige felter", req.body);
         return res.status(400).send({
           error:
             "Mangler jobId, providerId, ownerId eller beløb (>0). Betaling blev IKKE oprettet.",
         });
       }
 
-      // Create Stripe client *inside* handler with runtime secret
+      // Stripe client med runtime secret
       const stripe = new Stripe(STRIPE_SECRET_KEY.value(), {
         apiVersion: "2024-06-20",
       });
 
-      // Create PaymentIntent (store providerId as 'mechanicId' in metadata)
+      // Opret PaymentIntent
       const pi = await stripe.paymentIntents.create({
         amount: Number(amount),
         currency: "dkk",
-        metadata: { jobId, mechanicId: providerId, ownerId },
-        // optional: automatic payment methods
+        metadata: { jobId, providerId, ownerId },
         automatic_payment_methods: { enabled: true },
       });
 
       logger.info(
         `✅ PaymentIntent oprettet for job ${jobId} / provider ${providerId} / amount ${amount}`
       );
+
       res.json({ clientSecret: pi.client_secret });
     } catch (error) {
       logger.error("Error creating PaymentIntent:", error);
@@ -81,14 +81,11 @@ exports.createPaymentIntent = onRequest(
 );
 
 /**
- * 👉 Stripe webhook (updates job → paid, writes payouts)
- * IMPORTANT: Stripe needs the raw body for signature verification.
+ * 👉 Stripe webhook (sætter job → paid, opretter payouts osv.)
  */
 exports.stripeWebhook = onRequest(
   { region: "us-central1", secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET] },
   async (req, res) => {
-    // Do NOT add CORS to the webhook; Stripe doesn't need it.
-    // Verify signature with rawBody
     let event;
     try {
       const stripe = new Stripe(STRIPE_SECRET_KEY.value(), {
@@ -97,12 +94,12 @@ exports.stripeWebhook = onRequest(
 
       const sig = req.headers["stripe-signature"];
       event = stripe.webhooks.constructEvent(
-        req.rawBody, // raw body is available in v2 onRequest
+        req.rawBody, // rawBody til signatur
         sig,
         STRIPE_WEBHOOK_SECRET.value()
       );
     } catch (err) {
-      logger.error("Webhook signature verification failed.", err.message);
+      logger.error("Webhook signature verification failed:", err.message);
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
@@ -112,26 +109,26 @@ exports.stripeWebhook = onRequest(
           const pi = event.data.object;
           logger.info("✅ PaymentIntent succeeded:", pi.id);
 
-          const { jobId, mechanicId, ownerId } = pi.metadata || {};
-          const grossAmount = pi.amount_received; // øre
-          const netAmount = Math.round(Number(grossAmount || 0) * 0.9); // 90% to provider
+          const { jobId, providerId, ownerId } = pi.metadata || {};
+          const grossAmount = pi.amount_received; // i øre
+          const netAmount = Math.round(Number(grossAmount || 0) * 0.9); // 90% til provider
 
-          // 1) Record payment
+          // 1) Gem betaling
           await db.collection("payments").doc(pi.id).set({
             status: "succeeded",
             amount: grossAmount,
             currency: pi.currency,
             jobId: jobId || null,
-            mechanicId: mechanicId || null,
+            providerId: providerId || null,
             ownerId: ownerId || null,
             createdAt: admin.firestore.Timestamp.now(),
           });
 
-          // 2) Create payout for provider
-          if (mechanicId && Number.isFinite(netAmount)) {
+          // 2) Opret payout til provider
+          if (providerId && Number.isFinite(netAmount)) {
             const payoutRef = db
               .collection("providers")
-              .doc(mechanicId)
+              .doc(providerId)
               .collection("payouts")
               .doc(pi.id);
 
@@ -144,16 +141,11 @@ exports.stripeWebhook = onRequest(
             });
 
             logger.info(
-              `💸 Payout -> provider ${mechanicId}: ${netAmount} ${pi.currency}`
-            );
-          } else {
-            logger.warn(
-              "No mechanicId or invalid netAmount — payout not written",
-              { mechanicId, netAmount }
+              `💸 Payout -> provider ${providerId}: ${netAmount} ${pi.currency}`
             );
           }
 
-          // 3) Update job → paid
+          // 3) Opdater job → paid
           if (jobId) {
             const jobRef = db.collection("service_requests").doc(jobId);
             await jobRef.update({
@@ -170,11 +162,11 @@ exports.stripeWebhook = onRequest(
             });
             logger.info(`🔄 Job ${jobId} sat til "paid"`);
 
-            // 4) Mirror on provider's assigned_jobs
-            if (mechanicId) {
+            // 4) Opdater providerens assigned_jobs
+            if (providerId) {
               const assignedRef = db
                 .collection("providers")
-                .doc(mechanicId)
+                .doc(providerId)
                 .collection("assigned_jobs")
                 .doc(jobId);
 
@@ -186,7 +178,7 @@ exports.stripeWebhook = onRequest(
                   paidAt: admin.firestore.Timestamp.now(),
                 });
                 logger.info(
-                  `🔄 Assigned job ${jobId} for provider ${mechanicId} sat til "paid"`
+                  `🔄 Assigned job ${jobId} for provider ${providerId} sat til "paid"`
                 );
               }
             }
@@ -198,13 +190,13 @@ exports.stripeWebhook = onRequest(
           const pi = event.data.object;
           logger.warn("❌ PaymentIntent failed:", pi.id);
 
-          const { jobId, mechanicId, ownerId } = pi.metadata || {};
+          const { jobId, providerId, ownerId } = pi.metadata || {};
           await db.collection("payments").doc(pi.id).set({
             status: "failed",
             amount: pi.amount,
             currency: pi.currency,
             jobId: jobId || null,
-            mechanicId: mechanicId || null,
+            providerId: providerId || null,
             ownerId: ownerId || null,
             createdAt: admin.firestore.Timestamp.now(),
           });

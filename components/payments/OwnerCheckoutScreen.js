@@ -49,7 +49,7 @@ export default function OwnerCheckoutScreen() {
       const res = await createPaymentIntentForJob({
         amount: amountInMinor,
         jobId,
-        mechanicId: providerId,
+        providerId,
         ownerId,
       });
 
