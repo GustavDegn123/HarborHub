@@ -1,3 +1,4 @@
+// /services/requestsService.js
 import { db } from "../firebase";
 import {
   collection,
@@ -12,30 +13,26 @@ import {
   orderBy,
   setDoc,
   deleteDoc,
+  onSnapshot,
 } from "firebase/firestore";
 
-import { getProviderPublicSummary } from "./providersService"; // beholdt hvis du senere vil udvide med enriched bids
+import { getProviderPublicSummary } from "./providersService"; // bruges til enriched bids
 
 /* =========================
    Helpers
 ========================= */
-
 const withId = (d) => ({ id: d.id, ...d.data() });
 
 /* =========================
    CREATE
 ========================= */
-
-/** Opret en ny service request */
 export async function addRequest(ownerId, boatId, data) {
   const ref = collection(db, "service_requests");
-
   const payload = {
     owner_id: ownerId || null,
     boat_id: boatId || null,
     ...data,
 
-    // normaliser
     service_type: data?.service_type ?? "",
     description: data?.description ?? "",
     budget: typeof data?.budget === "string" ? parseInt(data.budget, 10) : data?.budget ?? null,
@@ -44,7 +41,6 @@ export async function addRequest(ownerId, boatId, data) {
     created_at: serverTimestamp(),
     updated_at: serverTimestamp(),
   };
-
   const docRef = await addDoc(ref, payload);
   return docRef.id;
 }
@@ -52,39 +48,62 @@ export async function addRequest(ownerId, boatId, data) {
 /* =========================
    READ
 ========================= */
-
-/** Hent én service request */
 export async function getServiceRequest(id) {
   if (!id) return null;
   const snap = await getDoc(doc(db, "service_requests", id));
   return snap.exists() ? withId(snap) : null;
 }
 
+export async function getRequestsByOwner(ownerId) {
+  if (!ownerId) return [];
+  const qRef = query(collection(db, "service_requests"), where("owner_id", "==", ownerId));
+  const snap = await getDocs(qRef);
+  return snap.docs.map(withId);
+}
+
 /* =========================
    Bids
 ========================= */
+export async function addBid(jobId, providerId, price, message) {
+  if (!providerId) throw new Error("Provider ID mangler");
+  const ref = collection(db, "service_requests", jobId, "bids");
+  await addDoc(ref, {
+    provider_id: providerId,
+    price: Number(price),
+    message: message || "",
+    created_at: serverTimestamp(),
+    accepted: false,
+  });
+}
 
-/** Intern helper: hent et specifikt bud */
+export async function getBids(jobId) {
+  if (!jobId) return [];
+  const ref = collection(db, "service_requests", jobId, "bids");
+  const qRef = query(ref, orderBy("created_at", "desc"));
+  const snap = await getDocs(qRef);
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      ...data,
+      created_at: data.created_at || null,
+      accepted: !!data.accepted,
+    };
+  });
+}
+
 async function getBid(jobId, bidId) {
   const snap = await getDoc(doc(db, "service_requests", jobId, "bids", bidId));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/** 
- * Ejer accepterer et bud: 
- * - opdater request
- * - markerer bud som accepted
- * - opretter reference under provider/assigned_jobs 
- */
 export async function acceptBid(jobId, bidId) {
   if (!jobId || !bidId) throw new Error("jobId/bidId mangler.");
-
   const bid = await getBid(jobId, bidId);
   if (!bid) throw new Error("Bud findes ikke.");
   const providerId = bid.provider_id || null;
   const price = typeof bid.price === "number" ? bid.price : Number(bid.price || 0);
 
-  // 1) Opdater request
   await updateDoc(doc(db, "service_requests", jobId), {
     status: "assigned",
     acceptedBidId: bidId,
@@ -94,10 +113,8 @@ export async function acceptBid(jobId, bidId) {
     updated_at: serverTimestamp(),
   });
 
-  // 2) Marker bud som accepted
   await updateDoc(doc(db, "service_requests", jobId, "bids", bidId), { accepted: true });
 
-  // 3) Opret providerens assigned job
   if (providerId) {
     await setDoc(doc(db, "providers", providerId, "assigned_jobs", jobId), {
       job_id: jobId,
@@ -107,22 +124,17 @@ export async function acceptBid(jobId, bidId) {
       assigned_at: serverTimestamp(),
     });
   }
-
   return true;
 }
 
 /* =========================
    Provider job-handlinger
 ========================= */
-
-/** Start et tildelt job */
 export async function startAssignedJob(jobId, providerId) {
   if (!jobId || !providerId) throw new Error("jobId/providerId mangler");
-
   const jobRef = doc(db, "service_requests", jobId);
   const jobSnap = await getDoc(jobRef);
   if (!jobSnap.exists()) throw new Error("Job ikke fundet");
-
   const job = jobSnap.data();
   if (job.acceptedProviderId !== providerId) throw new Error("Du er ikke tildelt dette job.");
 
@@ -138,14 +150,11 @@ export async function startAssignedJob(jobId, providerId) {
   }
 }
 
-/** Afslut et job */
 export async function completeAssignedJob(jobId, providerId) {
   if (!jobId || !providerId) throw new Error("jobId/providerId mangler");
-
   const jobRef = doc(db, "service_requests", jobId);
   const jobSnap = await getDoc(jobRef);
   if (!jobSnap.exists()) throw new Error("Job ikke fundet");
-
   const job = jobSnap.data();
   if (job.acceptedProviderId !== providerId) throw new Error("Du er ikke tildelt dette job.");
 
@@ -166,14 +175,11 @@ export async function completeAssignedJob(jobId, providerId) {
   }
 }
 
-/** Annullér et job */
 export async function cancelAssignedJob(jobId, providerId) {
   if (!jobId || !providerId) throw new Error("jobId/providerId mangler");
-
   const jobRef = doc(db, "service_requests", jobId);
   const jobSnap = await getDoc(jobRef);
   if (!jobSnap.exists()) throw new Error("Job ikke fundet");
-
   const job = jobSnap.data();
   if (job.acceptedProviderId !== providerId) throw new Error("Du er ikke tildelt dette job.");
 
@@ -196,15 +202,11 @@ export async function cancelAssignedJob(jobId, providerId) {
 /* =========================
    Statusmarkeringer
 ========================= */
-
-/** Marker job som PAID */
 export async function markJobPaid(jobId, amountMinor) {
   if (!jobId) return;
-
   const jobRef = doc(db, "service_requests", jobId);
   const jobSnap = await getDoc(jobRef);
   if (!jobSnap.exists()) return;
-
   const data = jobSnap.data();
   const providerId = data.acceptedProviderId || null;
 
@@ -234,14 +236,11 @@ export async function markJobPaid(jobId, amountMinor) {
   }
 }
 
-/** Marker job som REVIEWED */
 export async function markJobReviewed(jobId) {
   if (!jobId) return;
-
   const jobRef = doc(db, "service_requests", jobId);
   const jobSnap = await getDoc(jobRef);
   if (!jobSnap.exists()) return;
-
   const data = jobSnap.data();
   const providerId = data.acceptedProviderId || null;
 
@@ -262,4 +261,37 @@ export async function markJobReviewed(jobId) {
       });
     }
   }
+}
+
+/* =========================
+   Provider data
+========================= */
+export async function getProvider(uid) {
+  if (!uid) return null;
+  const snap = await getDoc(doc(db, "providers", uid));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+/* =========================
+   Live-lyttere
+========================= */
+export function listenAssignedJobs(providerId, callback, errorCallback) {
+  if (!providerId) return () => {};
+  const assignedRef = collection(db, "providers", providerId, "assigned_jobs");
+  return onSnapshot(
+    assignedRef,
+    async (snap) => {
+      const rows = [];
+      for (const d of snap.docs) {
+        const { job_id } = d.data() || {};
+        if (!job_id) continue;
+        const jobSnap = await getDoc(doc(db, "service_requests", job_id));
+        if (jobSnap.exists()) {
+          rows.push({ id: jobSnap.id, ...jobSnap.data() });
+        }
+      }
+      callback(rows);
+    },
+    (err) => errorCallback?.(err)
+  );
 }
