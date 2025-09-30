@@ -1,206 +1,111 @@
-/* eslint-disable */
-"use strict";
-
-const { setGlobalOptions } = require("firebase-functions/v2");
-const { onRequest } = require("firebase-functions/v2/https");
-const { logger } = require("firebase-functions");
-const { defineSecret } = require("firebase-functions/params");
+const functions = require("firebase-functions/v2/https");
+const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const Stripe = require("stripe");
-const cors = require("cors")({ origin: true });
 
-setGlobalOptions({ maxInstances: 10 });
-
-try {
-  admin.initializeApp();
-} catch (e) {}
-
-const STRIPE_SECRET = defineSecret("STRIPE_SECRET");                  // sk_test_...
-const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");  // whsec_...
+admin.initializeApp();
+const db = admin.firestore();
 
 /**
- * POST /createPaymentIntent
- * Body: { amount(øre), currency?, jobId, providerId, ownerId?, description? }
- * Return: { clientSecret, id }
+ * Create PaymentIntent (kaldes fra din app)
+ * Body skal indeholde: { amount, jobId, mechanicId, ownerId }
  */
-exports.createPaymentIntent = onRequest(
-  { region: "us-central1", secrets: [STRIPE_SECRET] },
-  function (req, res) {
-    cors(req, res, async function () {
-      if (req.method !== "POST") {
-        res.status(405).json({ error: "Method Not Allowed" });
-        return;
-      }
+exports.createPaymentIntent = functions.onRequest(
+  { secrets: ["STRIPE_SECRET_KEY"], region: "us-central1" },
+  async (req, res) => {
+    const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-      try {
-        const secret = STRIPE_SECRET.value();
-        if (!secret) {
-          res.status(500).json({ error: "Missing STRIPE_SECRET" });
-          return;
-        }
-        const stripe = new Stripe(secret);
+    const { amount, jobId, mechanicId, ownerId } = req.body;
 
-        // Undgå optional chaining for compatibility
-        const body = (req && req.body && typeof req.body === "object") ? req.body : {};
+    if (!amount) {
+      return res.status(400).send({ error: "Missing required field: amount" });
+    }
 
-        // amount i ØRE
-        const amount = Number(body.amount || 0);
-        const currency = String(body.currency || "dkk").toLowerCase();
-        const jobId = String(body.jobId || "");
-        const providerId = String(body.providerId || "");
-        const ownerId = String(body.ownerId || "");
-        const description = String(body.description || "HarborHub betaling (TEST)");
+    try {
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount,
+        currency: "dkk",
+        metadata: {
+          jobId: jobId || "",
+          mechanicId: mechanicId || "",
+          ownerId: ownerId || "",
+        },
+      });
 
-        if (!jobId || !providerId || !isFinite(amount) || amount <= 0) {
-          res.status(400).json({ error: "Missing or invalid fields" });
-          return;
-        }
-
-        // Hent providerens connected account id i Firestore
-        const provRef = admin.firestore().doc("providers/" + providerId);
-        const provSnap = await provRef.get();
-        const provData = provSnap.exists ? provSnap.data() : null;
-        const stripeAccountId = (provData && provData.stripeAccountId) ? provData.stripeAccountId : null;
-
-        if (!stripeAccountId) {
-          res.status(400).json({ error: "Provider mangler stripeAccountId" });
-          return;
-        }
-
-        const pi = await stripe.paymentIntents.create({
-          amount: Math.round(amount),
-          currency: currency,
-          description: description,
-          automatic_payment_methods: { enabled: true },
-          transfer_data: { destination: stripeAccountId }, // destination charge
-          application_fee_amount: 0,                        // intet fee i test
-          metadata: {
-            jobId: jobId,
-            providerId: providerId,
-            ownerId: ownerId
-          }
-        });
-
-        logger.info("Created PaymentIntent", {
-          id: pi.id,
-          amount: pi.amount,
-          jobId: jobId,
-          providerId: providerId
-        });
-
-        res.status(200).json({ clientSecret: pi.client_secret, id: pi.id });
-      } catch (err) {
-        logger.error("Stripe PI error", { message: (err && err.message) ? String(err.message) : String(err) });
-        res.status(500).json({ error: "Stripe error" });
-      }
-    });
+      res.json({ clientSecret: paymentIntent.client_secret });
+    } catch (error) {
+      logger.error("Error creating PaymentIntent:", error);
+      res.status(500).send({ error: error.message });
+    }
   }
 );
 
 /**
- * POST /stripeWebhook
- * Opdaterer Firestore ved betaling (succeeded/failed) og skriver earnings til providers/{providerId}.metrics.totalEarnedMinor
+ * Stripe Webhook (kaldes af Stripe ved events)
+ * Events: payment_intent.succeeded, payment_intent.payment_failed
  */
-exports.stripeWebhook = onRequest(
-  { region: "us-central1", secrets: [STRIPE_WEBHOOK_SECRET, STRIPE_SECRET] },
-  async function (req, res) {
+exports.stripeWebhook = functions.onRequest(
+  {
+    secrets: ["STRIPE_WEBHOOK_SECRET", "STRIPE_SECRET_KEY"],
+    region: "us-central1",
+  },
+  async (req, res) => {
+    const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
     const sig = req.headers["stripe-signature"];
-    if (!sig) {
-      res.status(400).send("Missing stripe-signature header");
-      return;
-    }
+    let event;
 
     try {
-      const signingSecret = STRIPE_WEBHOOK_SECRET.value();
-      const apiKey = STRIPE_SECRET.value();
-      if (!signingSecret || !apiKey) {
-        res.status(500).send("Missing webhook or API secret");
-        return;
-      }
-
-      const stripe = new Stripe(apiKey);
-
-      // Brug rå body for at verificere signaturen
-      const event = stripe.webhooks.constructEvent(req.rawBody, sig, signingSecret);
-
-      if (event && event.type === "payment_intent.succeeded") {
-        const pi = (event.data && event.data.object) ? event.data.object : null;
-        const md = (pi && pi.metadata) ? pi.metadata : {};
-        const jobId = md.jobId || "";
-        const providerId = md.providerId || "";
-        const ownerId = md.ownerId || "";
-
-        const amountMinor = Number((pi && pi.amount) ? pi.amount : 0); // ØRE
-        const currency = String((pi && pi.currency) ? pi.currency : "dkk").toLowerCase();
-
-        const batch = admin.firestore().batch();
-        const now = admin.firestore.FieldValue.serverTimestamp();
-
-        if (jobId) {
-          const jobRef = admin.firestore().doc("service_requests/" + jobId);
-          batch.set(jobRef, {
-            status: "paid",
-            payment: {
-              intentId: (pi && pi.id) ? pi.id : null,
-              amount: amountMinor,
-              currency: currency,
-              providerId: providerId || null,
-              ownerId: ownerId || null,
-              succeededAt: now
-            },
-            updated_at: now
-          }, { merge: true });
-        }
-
-        if (providerId) {
-          const provRef = admin.firestore().doc("providers/" + providerId);
-          batch.set(provRef, {
-            metrics: {
-              totalEarnedMinor: admin.firestore.FieldValue.increment(amountMinor),
-              lastPaidAt: now
-            }
-          }, { merge: true });
-
-          if (jobId) {
-            const assignedRef = admin.firestore().doc("providers/" + providerId + "/assigned_jobs/" + jobId);
-            batch.set(assignedRef, {
-              status: "paid",
-              lastPaymentAmountMinor: amountMinor,
-              lastPaymentCurrency: currency,
-              lastPaymentAt: now
-            }, { merge: true });
-          }
-        }
-
-        await batch.commit();
-        logger.info("Handled payment_intent.succeeded", { jobId: jobId, providerId: providerId, amountMinor: amountMinor });
-      }
-
-      if (event && event.type === "payment_intent.payment_failed") {
-        const pi = (event.data && event.data.object) ? event.data.object : null;
-        const md = (pi && pi.metadata) ? pi.metadata : {};
-        const jobId = md.jobId || "";
-        const lastMsg =
-          (pi && pi.last_payment_error && pi.last_payment_error.message)
-            ? pi.last_payment_error.message
-            : "unknown";
-
-        if (jobId) {
-          await admin.firestore().doc("service_requests/" + jobId).set({
-            payment: {
-              failed: true,
-              lastError: lastMsg,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            }
-          }, { merge: true });
-        }
-        logger.warn("payment_intent.payment_failed", { jobId: jobId, lastMsg: lastMsg });
-      }
-
-      res.sendStatus(200);
+      event = stripe.webhooks.constructEvent(
+        req.rawBody,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
     } catch (err) {
-      logger.error("Webhook handler error", { message: (err && err.message) ? String(err.message) : String(err) });
-      res.status(400).send("Webhook Error");
+      logger.error("❌ Webhook signature verification failed:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
     }
+
+    switch (event.type) {
+      case "payment_intent.succeeded": {
+        const paymentIntent = event.data.object;
+        logger.info("✅ PaymentIntent succeeded:", paymentIntent.id);
+
+        const { jobId, mechanicId, ownerId } = paymentIntent.metadata || {};
+
+        await db.collection("payments").doc(paymentIntent.id).set({
+          status: "succeeded",
+          amount: paymentIntent.amount_received,
+          currency: paymentIntent.currency,
+          jobId: jobId || null,
+          mechanicId: mechanicId || null,
+          ownerId: ownerId || null,
+          createdAt: admin.firestore.Timestamp.now(),
+        });
+        break;
+      }
+
+      case "payment_intent.payment_failed": {
+        const paymentIntent = event.data.object;
+        logger.warn("❌ PaymentIntent failed:", paymentIntent.id);
+
+        const { jobId, mechanicId, ownerId } = paymentIntent.metadata || {};
+
+        await db.collection("payments").doc(paymentIntent.id).set({
+          status: "failed",
+          amount: paymentIntent.amount,
+          currency: paymentIntent.currency,
+          jobId: jobId || null,
+          mechanicId: mechanicId || null,
+          ownerId: ownerId || null,
+          createdAt: admin.firestore.Timestamp.now(),
+        });
+        break;
+      }
+
+      default:
+        logger.info(`Unhandled event type ${event.type}`);
+    }
+
+    res.json({ received: true });
   }
 );

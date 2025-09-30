@@ -17,6 +17,7 @@ import {
 import { getProviderPublicSummary } from "../../services/providersService";
 import { recommendBid } from "../../utils/recommendation"; // AI-scorer
 import styles from "../../styles/boatowners/requestBidsStyles";
+import { auth } from "../../firebase"; // 👈 tilføjet
 
 const DKK = (n) =>
   typeof n === "number"
@@ -121,16 +122,18 @@ export default function RequestBidsScreen() {
 
       const providerId = bid.provider_id;
       const amount = Number(bid.price);
-      if (!providerId || !Number.isFinite(amount)) {
+      const ownerId = auth.currentUser?.uid; // 👈 tilføjet
+
+      if (!providerId || !Number.isFinite(amount) || !ownerId) {
         Alert.alert(
           "Bud accepteret",
-          "Opgaven er tildelt, men beløb/udbyder mangler for betaling."
+          "Opgaven er tildelt, men ejer-id/udbyder/beløb mangler for betaling."
         );
         return;
       }
 
       setRequestAssigned(true);
-      navigation.navigate("OwnerCheckout", { jobId, providerId, amount });
+      navigation.navigate("OwnerCheckout", { jobId, providerId, amount, ownerId });
     } catch (e) {
       Alert.alert("Fejl", e?.message || "Kunne ikke acceptere bud.");
     } finally {
@@ -143,10 +146,12 @@ export default function RequestBidsScreen() {
       Alert.alert("Mangler data", "Kunne ikke åbne betaling for dette bud.");
       return;
     }
+    const ownerId = auth.currentUser?.uid; // 👈 tilføjet
     navigation.navigate("OwnerCheckout", {
       jobId,
       providerId: bid.provider_id,
       amount: Number(bid.price),
+      ownerId,
     });
   }
 

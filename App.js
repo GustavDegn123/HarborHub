@@ -11,16 +11,14 @@ import { getUserRole } from "./services/authService";
 
 /* Stripe (TEST MODE) */
 import { StripeProvider } from "@stripe/stripe-react-native";
-// Holder appen i test mode. Skift til true når du engang går live.
-const USE_LIVE = false;
-const PUBLISHABLE_KEY_TEST =
-  "pk_test_51QHuaaB0CErNDJE4ynjiWbGaWXNnvYXNxJ5OMynlLn6VYtcKXQQSmw63VFPQLgn9lwFDtiHlt6X7U9h4fZZ4RAHT00cLmY19DV";
-const PUBLISHABLE_KEY_LIVE = "pk_live_xxx_replace_me_later"; // placeholder
-const STRIPE_PUBLISHABLE_KEY = USE_LIVE ? PUBLISHABLE_KEY_LIVE : PUBLISHABLE_KEY_TEST;
+
+// Vi kører KUN i test mode indtil videre
+// (du får pk_live senere når du går i drift)
+const STRIPE_PUBLISHABLE_KEY =
+  "pk_test_51SCjjXAaF7MIn0TOcUx6zljX4uVT4AomV81qmaVc8rmtx3skPdLyBO5zrVvSr6eo1EGESawEX581kl4aM5G2CR9O00NvG1eDtd";
 
 /* Criipto Verify (MitID, BankID, …) */
 import { CriiptoVerifyProvider } from "@criipto/verify-expo";
-// Sæt disse til dine app-detaljer fra Criipto dashboard
 const CRIIPTO_DOMAIN = "harborhub-test.criipto.id";
 const CRIIPTO_CLIENT_ID = "urn:my:application:identifier:839484";
 
