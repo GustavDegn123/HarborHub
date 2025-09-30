@@ -1,4 +1,3 @@
-// components/payments/OwnerCheckoutScreen.js
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
@@ -13,7 +12,6 @@ import {
   presentPaymentSheet,
 } from "@stripe/stripe-react-native";
 import { createPaymentIntentForJob } from "../../services/paymentsService";
-import { auth } from "../../firebase"; // 👈 tilføjet fallback
 
 const DKK = (n) =>
   typeof n === "number"
@@ -27,14 +25,9 @@ const DKK = (n) =>
 export default function OwnerCheckoutScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { jobId, providerId, ownerId: ownerIdFromParams, amount } =
-    route.params || {};
-
-  // Fallback: hent ownerId fra auth, hvis ikke givet
-  const ownerId = ownerIdFromParams || auth.currentUser?.uid || null;
+  const { jobId, providerId, ownerId, amount } = route.params || {};
 
   console.log("[OwnerCheckout] route.params:", route.params);
-  console.log("[OwnerCheckout] ownerId (brugt):", ownerId);
 
   const [loading, setLoading] = useState(true);
   const [clientSecret, setClientSecret] = useState(null);
@@ -56,15 +49,14 @@ export default function OwnerCheckoutScreen() {
       const res = await createPaymentIntentForJob({
         amount: amountInMinor,
         jobId,
-        providerId,
+        mechanicId: providerId,
         ownerId,
       });
 
       console.log("[OwnerCheckout] createPaymentIntentForJob ->", res);
 
-      if (!res?.clientSecret) {
+      if (!res?.clientSecret)
         throw new Error("Manglende clientSecret fra serveren.");
-      }
 
       setClientSecret(res.clientSecret);
 
@@ -103,9 +95,15 @@ export default function OwnerCheckoutScreen() {
         return;
       }
 
-      // ✅ Succes – webhook logger i Firestore
+      // ✅ Succes – webhook logger i Firestore og sætter status=paid
       Alert.alert("Betaling gennemført", "Tak! Din betaling er modtaget.");
-      navigation.goBack();
+
+      // Naviger direkte til LeaveReview
+      navigation.replace("LeaveReview", {
+        jobId,
+        providerId,
+        ownerId,
+      });
     } catch (e) {
       console.error("[OwnerCheckout] onPay error:", e);
       Alert.alert("Fejl", e?.message || "Noget gik galt under betalingen.");

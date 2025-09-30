@@ -1,4 +1,4 @@
-// /components/boatowners/OwnerAssignedScreen.js
+// components/boatowners/OwnerAssignedScreen.js
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   View,
@@ -34,7 +34,6 @@ export default function OwnerAssignedScreen() {
   const [items, setItems] = useState([]);
   const [err, setErr] = useState("");
 
-  // Live-lyt alle ejerens requests (uden ekstra where/orderBy → undgår index-krav)
   useEffect(() => {
     if (!uid) return;
     setLoading(true);
@@ -53,25 +52,29 @@ export default function OwnerAssignedScreen() {
   }, [uid]);
 
   const onRefresh = useCallback(async () => {
-    // Vi bruger live-lyt – refresher kosmetisk
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 500);
   }, []);
 
-  // Split på aktive/afsluttede (exclude "open")
+  // Split i aktive og afsluttede jobs
   const { active, completed } = useMemo(() => {
     const act = [];
     const done = [];
+
     for (const r of items) {
-      const s = String(r.status || "").toLowerCase();
-      if (s === "completed" || s === "done" || s === "closed" || s === "paid") {
-        // "paid" regner vi som afsluttet i UI-listen
+      const status = String(r.status || "").toLowerCase();
+
+      if (status === "paid") {
+        // Når betalt → vis under afsluttede
         done.push(r);
-      } else if (s !== "open") {
-        act.push(r); // assigned / in_progress / andet
+      } else if (status === "completed" || status === "done" || status === "closed") {
+        // completed → også afsluttet (men helst skift til paid via webhook)
+        done.push(r);
+      } else if (status !== "open") {
+        act.push(r); // assigned, in_progress, etc.
       }
     }
-    // sortér nyeste opdaterede først (fallback created_at)
+
     const getMs = (x) =>
       x?.updated_at?.toMillis?.() ??
       x?.acceptedAt?.toMillis?.() ??
@@ -79,6 +82,7 @@ export default function OwnerAssignedScreen() {
       0;
     act.sort((a, b) => getMs(b) - getMs(a));
     done.sort((a, b) => getMs(b) - getMs(a));
+
     return { active: act, completed: done };
   }, [items]);
 
@@ -91,7 +95,7 @@ export default function OwnerAssignedScreen() {
           "Chat ikke tilgængelig",
           "Chatten er først tilgængelig, når opgaven er tildelt."
         );
-        }
+      }
       navigation.navigate("Chat", {
         jobId: job.id,
         ownerId,
@@ -110,14 +114,15 @@ export default function OwnerAssignedScreen() {
   function goToPayment(job) {
     try {
       const providerId = job?.acceptedProviderId;
-      const amount = typeof job?.acceptedPrice === "number" ? job.acceptedPrice : Number(job?.acceptedPrice || 0);
+      const amount = Number(job?.acceptedPrice || 0);
       if (!providerId || !Number.isFinite(amount) || amount <= 0) {
         return Alert.alert("Manglende info", "Betaling kan ikke åbnes – mangler pris eller mekaniker.");
       }
       navigation.navigate("OwnerCheckout", {
         jobId: job.id,
         providerId,
-        amount, // DKK (hele kroner)
+        ownerId: job.owner_id,
+        amount,
       });
     } catch (e) {
       Alert.alert("Fejl", e?.message || "Kunne ikke åbne betaling.");
@@ -125,14 +130,9 @@ export default function OwnerAssignedScreen() {
   }
 
   function openReview(job) {
-    const isPaid = String(job.status || "").toLowerCase() === "paid" ||
-                   !!job?.payment?.succeededAt ||
-                   !!job?.payment?.clientMarkedPaid;
-    const canReview =
-      String(job.status || "").toLowerCase() === "completed" && // opgaven er markeret afsluttet
-      isPaid &&                                                 // og der er betalt
-      !!job.acceptedProviderId &&
-      !job.reviewGiven;
+    const status = String(job.status || "").toLowerCase();
+    const isPaid = status === "paid" || !!job?.payment?.succeededAt;
+    const canReview = isPaid && !!job.acceptedProviderId && !job.reviewGiven;
 
     if (!canReview) {
       return Alert.alert("Ikke klar", "Denne opgave kan ikke anmeldes endnu.");
@@ -175,29 +175,19 @@ export default function OwnerAssignedScreen() {
 
   const JobCard = ({ job, showReviewButton = false }) => {
     const img = job.image || job.imageUrl || job.imageURL || job.photoURL || null;
+    const status = String(job.status || "").toLowerCase();
 
-    // Betalt?
-    const isPaid =
-      String(job.status || "").toLowerCase() === "paid" ||
-      !!job?.payment?.succeededAt ||
-      !!job?.payment?.clientMarkedPaid;
+    const isPaid = status === "paid" || !!job?.payment?.succeededAt;
 
-    // Kan vi betale nu? (tildelt/afsluttet, men ikke betalt, og pris/mekaniker findes)
-    const statusStr = String(job.status || "").toLowerCase();
     const canPay =
-      (statusStr === "assigned" || statusStr === "completed") &&
+      (status === "assigned" || status === "completed") &&
       !isPaid &&
       !!job?.acceptedProviderId &&
       Number.isFinite(Number(job?.acceptedPrice)) &&
       Number(job?.acceptedPrice) > 0;
 
-    // Kan vi anmelde? (afsluttet + betalt + ikke anmeldt)
     const canReview =
-      showReviewButton &&
-      statusStr === "completed" &&
-      isPaid &&
-      !!job.acceptedProviderId &&
-      !job.reviewGiven;
+      showReviewButton && isPaid && !!job.acceptedProviderId && !job.reviewGiven;
 
     return (
       <View
@@ -274,7 +264,6 @@ export default function OwnerAssignedScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* BETAL NU – vises kun når muligt */}
         {canPay && (
           <TouchableOpacity
             onPress={() => goToPayment(job)}
@@ -292,7 +281,6 @@ export default function OwnerAssignedScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ANMELD – kun når afsluttet og betalt */}
         {canReview && (
           <TouchableOpacity
             onPress={() => openReview(job)}
@@ -330,21 +318,10 @@ export default function OwnerAssignedScreen() {
     >
       <Text style={{ fontSize: 22, fontWeight: "800" }}>Mine igangværende opgaver</Text>
 
-      {/* Aktive */}
       <Text style={{ marginTop: 4, fontWeight: "700", fontSize: 16 }}>Aktive</Text>
       {active.length === 0 ? (
-        <View
-          style={{
-            borderWidth: 1,
-            borderColor: "#E5E7EB",
-            borderRadius: 12,
-            padding: 16,
-            backgroundColor: "#F9FAFB",
-          }}
-        >
-          <Text style={{ color: "#6B7280" }}>
-            Du har ingen aktive opgaver lige nu.
-          </Text>
+        <View style={{ borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 12, padding: 16, backgroundColor: "#F9FAFB" }}>
+          <Text style={{ color: "#6B7280" }}>Du har ingen aktive opgaver lige nu.</Text>
         </View>
       ) : (
         <FlatList
@@ -356,21 +333,10 @@ export default function OwnerAssignedScreen() {
         />
       )}
 
-      {/* Afsluttede */}
       <Text style={{ marginTop: 16, fontWeight: "700", fontSize: 16 }}>Afsluttede</Text>
       {completed.length === 0 ? (
-        <View
-          style={{
-            borderWidth: 1,
-            borderColor: "#E5E7EB",
-            borderRadius: 12,
-            padding: 16,
-            backgroundColor: "#F9FAFB",
-          }}
-        >
-          <Text style={{ color: "#6B7280" }}>
-            Du har ingen afsluttede opgaver endnu.
-          </Text>
+        <View style={{ borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 12, padding: 16, backgroundColor: "#F9FAFB" }}>
+          <Text style={{ color: "#6B7280" }}>Du har ingen afsluttede opgaver endnu.</Text>
         </View>
       ) : (
         <FlatList
@@ -382,11 +348,7 @@ export default function OwnerAssignedScreen() {
         />
       )}
 
-      {!!err && (
-        <Text style={{ color: "red", marginTop: 8 }}>
-          Fejl: {err}
-        </Text>
-      )}
+      {!!err && <Text style={{ color: "red", marginTop: 8 }}>Fejl: {err}</Text>}
     </ScrollView>
   );
 }

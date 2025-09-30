@@ -6,30 +6,26 @@ const Stripe = require("stripe");
 admin.initializeApp();
 const db = admin.firestore();
 
+// Init Stripe med secret
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY || "");
+
 /**
- * Create PaymentIntent (kaldes fra din app)
- * Body skal indeholde: { amount, jobId, mechanicId, ownerId }
+ * 👉 Opret PaymentIntent til et job
  */
 exports.createPaymentIntent = functions.onRequest(
   { secrets: ["STRIPE_SECRET_KEY"], region: "us-central1" },
   async (req, res) => {
-    const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
-
     const { amount, jobId, mechanicId, ownerId } = req.body;
 
-    if (!amount) {
-      return res.status(400).send({ error: "Missing required field: amount" });
-    }
-
     try {
+      if (!amount || !jobId || !mechanicId || !ownerId) {
+        throw new Error("Mangler jobId, mechanicId, ownerId eller beløb.");
+      }
+
       const paymentIntent = await stripe.paymentIntents.create({
         amount,
         currency: "dkk",
-        metadata: {
-          jobId: jobId || "",
-          mechanicId: mechanicId || "",
-          ownerId: ownerId || "",
-        },
+        metadata: { jobId, mechanicId, ownerId },
       });
 
       res.json({ clientSecret: paymentIntent.client_secret });
@@ -41,8 +37,7 @@ exports.createPaymentIntent = functions.onRequest(
 );
 
 /**
- * Stripe Webhook (kaldes af Stripe ved events)
- * Events: payment_intent.succeeded, payment_intent.payment_failed
+ * 👉 Stripe webhook
  */
 exports.stripeWebhook = functions.onRequest(
   {
@@ -50,7 +45,6 @@ exports.stripeWebhook = functions.onRequest(
     region: "us-central1",
   },
   async (req, res) => {
-    const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
     const sig = req.headers["stripe-signature"];
     let event;
 
@@ -61,7 +55,7 @@ exports.stripeWebhook = functions.onRequest(
         process.env.STRIPE_WEBHOOK_SECRET
       );
     } catch (err) {
-      logger.error("❌ Webhook signature verification failed:", err.message);
+      logger.error("Webhook signature verification failed.", err.message);
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
@@ -72,6 +66,7 @@ exports.stripeWebhook = functions.onRequest(
 
         const { jobId, mechanicId, ownerId } = paymentIntent.metadata || {};
 
+        // Gem betaling i "payments"
         await db.collection("payments").doc(paymentIntent.id).set({
           status: "succeeded",
           amount: paymentIntent.amount_received,
@@ -81,6 +76,23 @@ exports.stripeWebhook = functions.onRequest(
           ownerId: ownerId || null,
           createdAt: admin.firestore.Timestamp.now(),
         });
+
+        // Opdater job → status: "paid"
+        if (jobId) {
+          await db.collection("service_requests").doc(jobId).set(
+            {
+              status: "paid",
+              payment: {
+                succeededAt: admin.firestore.Timestamp.now(),
+                paymentIntentId: paymentIntent.id,
+                amount: paymentIntent.amount_received,
+              },
+            },
+            { merge: true } // ⚡ vigtigt: overskriver ikke andre felter
+          );
+          logger.info(`🔄 Job ${jobId} sat til "paid"`);
+        }
+
         break;
       }
 
@@ -99,6 +111,7 @@ exports.stripeWebhook = functions.onRequest(
           ownerId: ownerId || null,
           createdAt: admin.firestore.Timestamp.now(),
         });
+
         break;
       }
 
