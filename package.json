@@ -22,11 +22,14 @@
     "expo": "^54.0.10",
     "expo-auth-session": "~7.0.8",
     "expo-checkbox": "^5.0.7",
+    "expo-constants": "~18.0.9",
+    "expo-device": "~8.0.9",
     "expo-google-app-auth": "~8.3.0",
     "expo-image-manipulator": "~14.0.7",
     "expo-image-picker": "~17.0.8",
     "expo-linking": "~8.0.8",
     "expo-location": "~19.0.7",
+    "expo-notifications": "~0.32.12",
     "expo-status-bar": "~3.0.8",
     "expo-web-browser": "~15.0.7",
     "firebase": "^12.2.1",
@@ -45,7 +48,8 @@
     "stripe": "^18.5.0"
   },
   "devDependencies": {
-    "@babel/preset-react": "^7.27.1"
+    "@babel/preset-react": "^7.27.1",
+    "eas-cli": "^16.20.1"
   },
   "description": "1. Betaling / udbetaling 2. Implementer AI til at vurdere bud... Altså en anbefalings algoritme ud fra hvad mekanikeren kan og hvor god han er.  3. Styling 4. Giv mekanikeren et navn når deres bud kommer frem på bådmandens side. 5. Giv alle job et rigtigt navn istedet for et random ID-navn (213j2l1j3k21mn3k12341a)",
   "keywords": [],

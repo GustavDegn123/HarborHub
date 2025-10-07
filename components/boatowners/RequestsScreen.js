@@ -1,3 +1,4 @@
+// components/boatowners/RequestsScreen.js
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -10,8 +11,12 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { auth } from "../../firebase";
 import styles from "../../styles/boatowners/requestsStyles";
-import { listenOwnerRequestsSafe, listenBidsCount } from "../../services/requestsService";
- 
+import {
+  listenOwnerRequestsSafe,
+  listenBidsCount,
+} from "../../services/requestsService";
+import { watchBidsForJobs } from "../../services/bidNotificationWatcher";
+
 /* ---------- Helpers ---------- */
 const ts = (v) => {
   if (!v) return 0;
@@ -21,9 +26,11 @@ const ts = (v) => {
     const date = d instanceof Date ? d : new Date(d);
     const t = date.getTime();
     return Number.isFinite(t) ? t : 0;
-  } catch { return 0; }
+  } catch {
+    return 0;
+  }
 };
- 
+
 const DKK = (n) =>
   typeof n === "number"
     ? new Intl.NumberFormat("da-DK", {
@@ -32,7 +39,7 @@ const DKK = (n) =>
         maximumFractionDigits: 0,
       }).format(n)
     : "—";
- 
+
 /* Deadlines -> dansk label */
 const deadlineLabel = (req) => {
   const t = req?.deadlineType;
@@ -41,14 +48,13 @@ const deadlineLabel = (req) => {
     const d = req?.deadline?.toDate ? req.deadline.toDate() : new Date(req.deadline);
     if (!(d instanceof Date) || isNaN(d)) return t;
     const dateStr = d.toLocaleDateString("da-DK");
-    return t === "Før Dato" ? `Senest ${dateStr}` : dateStr;
+    return t === "Før Dato" ? `Senest ${dateStr}` : `${dateStr}`;
   } catch {
     return t;
   }
 };
- 
+
 /* ---------- Status: normalisering + danske labels ---------- */
-/** Map både engelske og danske ind-værdier til et "slug" (engelsk) */
 function normalizeStatus(raw) {
   const s = String(raw || "").trim().toLowerCase();
   // engelske varianter
@@ -67,8 +73,7 @@ function normalizeStatus(raw) {
   if (["anmeldt"].includes(s)) return "reviewed";
   return "open";
 }
- 
-/** Dansk label + styleKey (matcher dine style-keys som oftest er engelsk-slugs) */
+
 function statusDisplay(raw) {
   const slug = normalizeStatus(raw);
   switch (slug) {
@@ -88,19 +93,20 @@ function statusDisplay(raw) {
       return { label: "Ukendt", styleKey: "unknown" };
   }
 }
- 
+
 /** Bud er accepteret/tildelt -> vis “tildelt”-tekster */
 const isAwardedStatus = (status) => {
   const slug = normalizeStatus(status);
   return ["assigned", "in_progress", "completed", "paid"].includes(slug);
 };
- 
+
 export default function RequestsScreen() {
   const navigation = useNavigation();
   const [rows, setRows] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const bidUnsubsRef = useRef(new Map());
- 
+  const stopBidsWatchRef = useRef(null); // stop-funktion til lokal-notifikations-watcher
+
   /* Lyt til ejerens requests */
   useEffect(() => {
     const ownerId = auth.currentUser?.uid;
@@ -117,10 +123,13 @@ export default function RequestsScreen() {
       unsub?.();
       bidUnsubsRef.current.forEach((u) => u?.());
       bidUnsubsRef.current.clear();
+      // stop evt. kørende bid-watcher
+      stopBidsWatchRef.current?.();
+      stopBidsWatchRef.current = null;
     };
   }, []);
- 
-  /* Lyt til antal bud pr. request */
+
+  /* Lyt til antal bud pr. request (UI badge) */
   useEffect(() => {
     if (!Array.isArray(rows)) return;
     const next = new Map(bidUnsubsRef.current);
@@ -136,6 +145,7 @@ export default function RequestsScreen() {
         next.set(r.id, u);
       }
     });
+    // oprydning for fjernede jobs
     for (const [jobId, u] of next.entries()) {
       if (!rows.find((x) => x.id === jobId)) {
         u?.();
@@ -144,7 +154,21 @@ export default function RequestsScreen() {
     }
     bidUnsubsRef.current = next;
   }, [rows?.length]);
- 
+
+  /* Start/Genstart lokal-notifikations-watcher for aktive jobs */
+  useEffect(() => {
+    if (!Array.isArray(rows)) return;
+    // Lyt kun på jobs som ikke er afsluttet/anmeldt
+    const activeJobIds = rows
+      .filter((r) => !["reviewed", "completed"].includes(normalizeStatus(r?.status)))
+      .map((r) => r.id);
+
+    // Genstart kun når set ændrer sig
+    stopBidsWatchRef.current?.();
+    stopBidsWatchRef.current =
+      activeJobIds.length > 0 ? watchBidsForJobs(activeJobIds) : null;
+  }, [rows?.map?.((r) => `${r.id}|${r.status}`).join(",")]);
+
   /* Filtrér/Sorter (skjul “reviewed”/“anmeldt”) */
   const items = useMemo(() => {
     if (!Array.isArray(rows)) return null;
@@ -156,12 +180,12 @@ export default function RequestsScreen() {
     );
     return filtered;
   }, [rows]);
- 
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 450);
   }, []);
- 
+
   const renderStatusChip = (status) => {
     const { label, styleKey } = statusDisplay(status);
     const key = `st_${styleKey}`;
@@ -171,12 +195,12 @@ export default function RequestsScreen() {
       </View>
     );
   };
- 
+
   const renderItem = ({ item }) => {
     const bidsCount = Number(item?.bidsCount) || 0;
     const loc = item?.location?.label || "";
     const awarded = isAwardedStatus(item.status);
- 
+
     return (
       <TouchableOpacity
         style={styles.card}
@@ -188,23 +212,23 @@ export default function RequestsScreen() {
           </Text>
           {renderStatusChip(item.status)}
         </View>
- 
+
         {!!item.description && (
           <Text style={styles.description} numberOfLines={3}>
             {item.description}
           </Text>
         )}
- 
+
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>Budget</Text>
           <Text style={styles.metaValue}>{DKK(Number(item.budget))}</Text>
         </View>
- 
+
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>Deadline</Text>
           <Text style={styles.metaValue}>{deadlineLabel(item)}</Text>
         </View>
- 
+
         {loc ? (
           <View style={styles.metaRow}>
             <Text style={styles.metaLabel}>Placering</Text>
@@ -213,7 +237,7 @@ export default function RequestsScreen() {
             </Text>
           </View>
         ) : null}
- 
+
         <View style={styles.footerRow}>
           <Text style={styles.bidsText}>
             {awarded
@@ -229,7 +253,7 @@ export default function RequestsScreen() {
       </TouchableOpacity>
     );
   };
- 
+
   if (items === null) {
     return (
       <View style={styles.center}>
@@ -237,7 +261,7 @@ export default function RequestsScreen() {
       </View>
     );
   }
- 
+
   if (items.length === 0) {
     return (
       <View style={styles.center}>
@@ -245,7 +269,7 @@ export default function RequestsScreen() {
       </View>
     );
   }
- 
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Mine serviceopgaver</Text>
@@ -259,4 +283,3 @@ export default function RequestsScreen() {
     </View>
   );
 }
- 
