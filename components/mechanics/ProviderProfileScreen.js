@@ -24,6 +24,7 @@ import {
   updateDoc,
   setDoc,
   serverTimestamp,
+  getDoc,               // ⬅️ hentes for at slå op i service_requests
 } from "firebase/firestore";
 import {
   getProviderProfile,
@@ -33,10 +34,10 @@ import {
 import { useCriiptoVerify } from "@criipto/verify-expo";
 import styles, { COLORS } from "../../styles/mechanics/providerProfileStyles";
 import { logout } from "../../services/authService";
- 
+
 // Sørg for at AuthSession færdiggøres når vi vender tilbage fra browser
 WebBrowser.maybeCompleteAuthSession();
- 
+
 /* Helpers */
 const DKK = (n) =>
   typeof n === "number"
@@ -46,7 +47,7 @@ const DKK = (n) =>
         maximumFractionDigits: 0,
       }).format(n)
     : "—";
- 
+
 function Stars({ rating = 0, size = 14 }) {
   const r = Math.max(0, Math.min(5, Number(rating) || 0));
   const full = Math.floor(r);
@@ -59,10 +60,14 @@ function Stars({ rating = 0, size = 14 }) {
     </Text>
   );
 }
- 
+
+// Titelprioritet som i kalenderen
+const pickTitle = (obj = {}) =>
+  obj.service_type || obj.title || obj.name || null;
+
 export default function ProviderProfileScreen({ navigation }) {
   const uid = auth.currentUser?.uid;
- 
+
   const [loading, setLoading] = useState(true);
   const [prov, setProv] = useState(null);
   const [assigned, setAssigned] = useState([]);
@@ -70,10 +75,13 @@ export default function ProviderProfileScreen({ navigation }) {
   const [reviews, setReviews] = useState([]);
   const [error, setError] = useState(null);
   const [showCompleted, setShowCompleted] = useState(false);
- 
+
+  // cache med ekstra metadata fra service_requests (titel m.m.)
+  const [jobMeta, setJobMeta] = useState({}); // { [jobId]: { title, description } }
+
   // Criipto (MitID) hook
   const { login: mitIdLogin, claims, error: mitIdError } = useCriiptoVerify();
- 
+
   // 1) Hent basis-profil + udbetalinger (engangs)
   useEffect(() => {
     let cancelled = false;
@@ -86,13 +94,19 @@ export default function ProviderProfileScreen({ navigation }) {
         ]);
         if (!cancelled) {
           setProv(profile || {});
-          setPayouts(
-            (payoutsData || []).sort(
+          // Normalisér Stripe-beløb (øre) til kroner
+          const normalized = (payoutsData || [])
+            .map((p) => {
+              const amt = Number(p?.amount);
+              const amountDKK = Number.isFinite(amt) ? amt / 100 : 0; // øre → kr.
+              return { ...p, amountDKK };
+            })
+            .sort(
               (a, b) =>
                 (b?.createdAt?.toMillis?.() || 0) -
                 (a?.createdAt?.toMillis?.() || 0)
-            )
-          );
+            );
+          setPayouts(normalized);
         }
       } catch (e) {
         if (!cancelled) setError(e?.message || String(e));
@@ -104,7 +118,7 @@ export default function ProviderProfileScreen({ navigation }) {
       cancelled = true;
     };
   }, [uid]);
- 
+
   // 2) Live: lyt til tildelte jobs
   useEffect(() => {
     if (!uid) return;
@@ -122,7 +136,53 @@ export default function ProviderProfileScreen({ navigation }) {
     );
     return () => unsub();
   }, [uid]);
- 
+
+  // 2b) Når assigned ændrer sig: hent manglende titler fra service_requests og cache dem
+  useEffect(() => {
+    let isCancelled = false;
+
+    (async () => {
+      // Vi henter KUN for dem, der mangler en titel i assigned OG ikke er i cachen
+      const missing = assigned
+        .map((j) => ({ j, id: j.job_id || j.id }))
+        .filter(({ j, id }) => {
+          if (!id) return false;
+          const hasLocal = !!pickTitle(j);
+          const hasCached = !!pickTitle(jobMeta[id] || {});
+          return !hasLocal && !hasCached;
+        });
+
+      if (missing.length === 0) return;
+
+      try {
+        const pairs = await Promise.all(
+          missing.map(async ({ id }) => {
+            const snap = await getDoc(doc(db, "service_requests", id));
+            const data = snap.exists() ? snap.data() : {};
+            const title = pickTitle(data);
+            const description = data.description || null;
+            return [id, { title, description }];
+          })
+        );
+
+        if (!isCancelled) {
+          setJobMeta((prev) => {
+            const next = { ...prev };
+            for (const [id, meta] of pairs) next[id] = meta;
+            return next;
+          });
+        }
+      } catch (e) {
+        // Stille fejlhåndtering – titler er “nice to have”
+        console.log("Kunne ikke hente jobtitler:", e?.message || e);
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [assigned, jobMeta]);
+
   // 3) Live: lyt til reviews
   useEffect(() => {
     if (!uid) return;
@@ -133,14 +193,14 @@ export default function ProviderProfileScreen({ navigation }) {
     );
     return () => unsub?.();
   }, [uid]);
- 
+
   // Split på aktive / færdige + KPI’er
   const { activeJobs, completedJobs, activeCount, completedCount, earnings } =
     useMemo(() => {
       const act = [];
       const done = [];
       let sum = 0;
- 
+
       for (const j of assigned) {
         const s = String(j.status || "").toLowerCase();
         if (
@@ -164,19 +224,16 @@ export default function ProviderProfileScreen({ navigation }) {
         earnings: sum,
       };
     }, [assigned]);
- 
-  // Total udbetalt (sum af payouts.amount)
+
+  // Total udbetalt (sum af payouts.amountDKK)
   const payoutsTotal = useMemo(() => {
     try {
-      return (payouts || []).reduce((acc, p) => {
-        const n = Number(p?.amount);
-        return acc + (Number.isFinite(n) ? n : 0) / 100;
-      }, 0);
+      return (payouts || []).reduce((acc, p) => acc + (p?.amountDKK || 0), 0);
     } catch {
       return 0;
     }
   }, [payouts]);
- 
+
   // Fallback-beregning af rating ud fra reviews
   const { avgFromReviews, countFromReviews } = useMemo(() => {
     const valid = (reviews || []).filter(
@@ -190,23 +247,23 @@ export default function ProviderProfileScreen({ navigation }) {
       : 0;
     return { avgFromReviews: avg, countFromReviews: count };
   }, [reviews]);
- 
+
   const avgRating =
     typeof prov?.avgRating === "number" && prov?.reviewCount > 0
       ? prov.avgRating
       : avgFromReviews;
- 
+
   const reviewCount =
     typeof prov?.reviewCount === "number" && prov?.reviewCount > 0
       ? prov.reviewCount
       : countFromReviews;
- 
+
   // Actions: opdatér jobstatus både i requests og i assigned_jobs
   async function setStatus(job, status) {
     try {
       const jobId = job.job_id || job.id;
       if (!jobId) throw new Error("Mangler job-id");
- 
+
       // 1) service_requests/{jobId}
       await updateDoc(doc(db, "service_requests", jobId), {
         status,
@@ -214,7 +271,7 @@ export default function ProviderProfileScreen({ navigation }) {
         ...(status === "in_progress" ? { startedAt: serverTimestamp() } : {}),
         ...(status === "completed" ? { completedAt: serverTimestamp() } : {}),
       });
- 
+
       // 2) providers/{uid}/assigned_jobs/{jobId}
       await updateDoc(doc(db, "providers", uid, "assigned_jobs", jobId), {
         status,
@@ -225,7 +282,7 @@ export default function ProviderProfileScreen({ navigation }) {
       Alert.alert("Fejl", e?.message || "Kunne ikke opdatere jobstatus.");
     }
   }
- 
+
   // MitID: Verificer-knap
   async function handleMitIDVerify() {
     if (!uid) {
@@ -237,12 +294,12 @@ export default function ProviderProfileScreen({ navigation }) {
         Constants.appOwnership === "expo"
           ? Linking.createURL("/auth/callback")
           : "harborhub://auth/callback";
- 
+
       const acr = "urn:grn:authn:dk:mitid:substantial";
       const result = await mitIdLogin(acr, redirectUri);
- 
+
       const c = claims || result?.claims || result || {};
- 
+
       await setDoc(
         doc(db, "providers", uid),
         {
@@ -253,7 +310,7 @@ export default function ProviderProfileScreen({ navigation }) {
         },
         { merge: true }
       );
- 
+
       await setDoc(
         doc(db, "users", uid),
         {
@@ -264,7 +321,7 @@ export default function ProviderProfileScreen({ navigation }) {
         },
         { merge: true }
       );
- 
+
       Alert.alert("MitID", "✅ Din identitet er verificeret med MitID.");
       const latest = await getProviderProfile(uid).catch(() => ({}));
       setProv(latest || {});
@@ -290,7 +347,7 @@ export default function ProviderProfileScreen({ navigation }) {
       }
     }
   }
- 
+
   // Log ud (med confirm)
   const handleLogout = () => {
     Alert.alert(
@@ -313,7 +370,7 @@ export default function ProviderProfileScreen({ navigation }) {
       { cancelable: true }
     );
   };
- 
+
   if (loading) {
     return (
       <View style={styles.loader}>
@@ -322,7 +379,7 @@ export default function ProviderProfileScreen({ navigation }) {
       </View>
     );
   }
- 
+
   if (error) {
     return (
       <View style={styles.loader}>
@@ -330,10 +387,10 @@ export default function ProviderProfileScreen({ navigation }) {
       </View>
     );
   }
- 
+
   const displayName =
     prov?.displayName || prov?.companyName || auth.currentUser?.email || "Min profil";
- 
+
   const MitIDBadge = () =>
     prov?.mitidVerified ? (
       <View style={styles.badgeGood}>
@@ -346,7 +403,17 @@ export default function ProviderProfileScreen({ navigation }) {
         <Text style={styles.badgeBadText}>Ikke verificeret</Text>
       </View>
     );
- 
+
+  // Hjælper til at få visningsnavn for et job (assigned + cache fra service_requests)
+  const getDisplayTitle = (j) => {
+    const id = j.job_id || j.id;
+    return (
+      pickTitle(j) ||
+      (id && pickTitle(jobMeta[id] || {})) ||
+      `Job #${id || "—"}`
+    );
+  };
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ padding: 16 }}>
       {/* Header – Airbnb varm */}
@@ -356,7 +423,7 @@ export default function ProviderProfileScreen({ navigation }) {
         </Text>
         <Text style={styles.tagline}>Velkommen tilbage til HarborHub</Text>
       </View>
- 
+
       {/* Identitet / MitID */}
       <View style={styles.identityCard}>
         <View style={styles.identityRow}>
@@ -365,11 +432,11 @@ export default function ProviderProfileScreen({ navigation }) {
           <View style={{ flex: 1 }} />
           <MitIDBadge />
         </View>
- 
+
         <Text style={styles.identityDesc}>
           Bekræft din identitet med MitID og vis bådejerne, at du er troværdig.
         </Text>
- 
+
         <TouchableOpacity
           style={[
             styles.identityBtn,
@@ -382,18 +449,18 @@ export default function ProviderProfileScreen({ navigation }) {
             {prov?.mitidVerified ? "Allerede verificeret" : "Verificér med MitID"}
           </Text>
         </TouchableOpacity>
- 
+
         <Text style={styles.identityHelp}>
           Hvis du sidder fast på “Approved”, så vend tilbage til appen – den
           fortsætter automatisk. I Expo Go skal callback-URL’en være whitelisted
           i Criipto (General → Callback URLs).
         </Text>
- 
+
         {mitIdError ? (
           <Text style={styles.identityError}>MitID fejl: {String(mitIdError)}</Text>
         ) : null}
       </View>
- 
+
       {/* KPI’er – host-dashboard vibe */}
       <View style={styles.kpiGrid}>
         <View style={styles.kpiCard}>
@@ -417,7 +484,7 @@ export default function ProviderProfileScreen({ navigation }) {
           <Text style={styles.kpiLabel}>Udbetalt</Text>
         </View>
       </View>
- 
+
       {/* Rating */}
       <View style={styles.card}>
         <View style={styles.rowBetween}>
@@ -428,7 +495,7 @@ export default function ProviderProfileScreen({ navigation }) {
           {reviewCount} {reviewCount === 1 ? "anmeldelse" : "anmeldelser"}
         </Text>
       </View>
- 
+
       {/* Genveje */}
       <View style={styles.quickRow}>
         <TouchableOpacity
@@ -438,7 +505,7 @@ export default function ProviderProfileScreen({ navigation }) {
           <Feather name="clipboard" size={16} color={COLORS.accent} />
           <Text style={styles.quickText}>Mine opgaver</Text>
         </TouchableOpacity>
- 
+
         <TouchableOpacity
           style={styles.quickButton}
           onPress={() => navigation.navigate("ProviderCalendar")}
@@ -446,7 +513,7 @@ export default function ProviderProfileScreen({ navigation }) {
           <Feather name="calendar" size={16} color={COLORS.accent} />
           <Text style={styles.quickText}>Kalender</Text>
         </TouchableOpacity>
- 
+
         <TouchableOpacity
           style={[styles.quickButton, { borderColor: "#FCA5A5", backgroundColor: "#FFE4E6" }]}
           onPress={handleLogout}
@@ -455,7 +522,7 @@ export default function ProviderProfileScreen({ navigation }) {
           <Text style={[styles.quickText, { color: "#B91C1C" }]}>Log ud</Text>
         </TouchableOpacity>
       </View>
- 
+
       {/* Færdige jobs – fold-ud */}
       <Text style={styles.sectionTitle}>Færdige jobs</Text>
       <TouchableOpacity
@@ -469,7 +536,7 @@ export default function ProviderProfileScreen({ navigation }) {
           color={COLORS.sub}
         />
       </TouchableOpacity>
- 
+
       {showCompleted &&
         (completedJobs.length === 0 ? (
           <View style={styles.emptyBox}>
@@ -486,26 +553,29 @@ export default function ProviderProfileScreen({ navigation }) {
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
             renderItem={({ item }) => {
               const id = item.job_id || item.id;
+              const title = getDisplayTitle(item); // ← nu med opslag i service_requests
               return (
                 <TouchableOpacity
                   style={styles.jobCard}
                   onPress={() => navigation.navigate("JobDetail", { jobId: id })}
                 >
                   <View style={styles.rowBetween}>
-                    <Text style={styles.jobTitle}>Job #{id}</Text>
+                    <Text style={styles.jobTitle}>{title}</Text>
                     {item.price != null ? (
                       <Text style={styles.jobPrice}>
                         {DKK(Number(item.price))}
                       </Text>
                     ) : null}
                   </View>
-                  <Text style={styles.cardMeta}>Status: completed</Text>
+                  <Text style={styles.cardMeta}>
+                    Status: completed{ id ? ` · #${String(id).slice(0,6)}` : "" }
+                  </Text>
                 </TouchableOpacity>
               );
             }}
           />
         ))}
- 
+
       {/* Udbetalinger – “Airbnb payouts” */}
       <Text style={styles.sectionTitle}>Udbetalinger</Text>
       {payouts.length === 0 ? (
@@ -528,7 +598,8 @@ export default function ProviderProfileScreen({ navigation }) {
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.payoutAmount}>{DKK(p.amount)}</Text>
+                  {/* VIGTIGT: vis amountDKK (kroner), ikke amount (øre) */}
+                  <Text style={styles.payoutAmount}>{DKK(p.amountDKK)}</Text>
                   <Text style={styles.payoutDate}>
                     {p.createdAt?.toDate?.().toLocaleDateString?.("da-DK") || ""}
                   </Text>
