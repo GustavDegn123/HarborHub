@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "HarborHub",
+    "slug": "harborhub",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "scheme": "harborhub",
+
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gustavdegn.harborhub",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "HarborHub bruger din placering til at sætte opgavens position."
+      }
+    },
+
+    "android": {
+      "package": "com.gustavdegn.harborhub",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+
+    "web": {
+      "favicon": "./assets/logo.png"
+    },
+
+    "extra": {
+      "expoClientId": "16622525056-qcgjdv8gkbunfgv4c8g79qm0brnjvoj5.apps.googleusercontent.com",
+      "iosClientId": "16622525056-7pgliodrdtnruh16cobp7kjb8h838g58.apps.googleusercontent.com",
+      "androidClientId": "16622525056-3j94ogkp9q6gs2bn0p1q2q50iv9dt0q1.apps.googleusercontent.com",
+      "webClientId": "16622525056-i5cbljlogf92qbdc505gcbrn8cne8r48.apps.googleusercontent.com"
+    },
+
+    "plugins": [
+      [
+        "@criipto/verify-expo",
+        {
+          "androidAppLinks": []
+        }
+      ]
+    ]
+  }
+}
