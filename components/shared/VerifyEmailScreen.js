@@ -1,62 +1,119 @@
 // components/shared/VerifyEmailScreen.js
-import React, { useState } from "react";
-import { View, Text, TouchableOpacity, Alert } from "react-native";
+import React, { useMemo, useState } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  SafeAreaView,
+} from "react-native";
 import { auth } from "../../firebase";
 import { sendEmailVerification, reload, signOut } from "firebase/auth";
+import styles from "../../styles/shared/verifyEmailStyles";
 
 export default function VerifyEmailScreen() {
   const [busy, setBusy] = useState(false);
+  const email = useMemo(() => auth.currentUser?.email ?? "", [auth.currentUser]);
 
   const resend = async () => {
     try {
       setBusy(true);
-      if (!auth.currentUser) throw new Error("Ikke logget ind");
+      if (!auth.currentUser) throw new Error("Ikke logget ind.");
       await sendEmailVerification(auth.currentUser);
       Alert.alert("Sendt", "Vi har sendt verifikationsmail igen.");
     } catch (e) {
-      Alert.alert("Fejl", e.message || String(e));
-    } finally { setBusy(false); }
+      Alert.alert("Fejl", e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const check = async () => {
     try {
       setBusy(true);
-      if (!auth.currentUser) throw new Error("Ikke logget ind");
+      if (!auth.currentUser) throw new Error("Ikke logget ind.");
       await reload(auth.currentUser);
       if (auth.currentUser.emailVerified) {
-        Alert.alert("Tak", "Din e-mail er bekræftet. Du sendes videre…");
-        // App.js lytter på onAuthStateChanged og vil vise normale skærme
+        Alert.alert("Tak!", "Din e-mail er bekræftet – du sendes videre.");
+        // App.js skifter automatisk væk herfra, når auth-brugeren er opdateret
       } else {
         Alert.alert("Ikke bekræftet endnu", "Klik på linket i mailen og prøv igen.");
       }
     } catch (e) {
-      Alert.alert("Fejl", e.message || String(e));
-    } finally { setBusy(false); }
+      Alert.alert("Fejl", e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const doLogout = async () => {
-    try { await signOut(auth); } catch (e) {
-      Alert.alert("Fejl", e.message || String(e));
+    try {
+      setBusy(true);
+      await signOut(auth);
+    } catch (e) {
+      Alert.alert("Fejl", e?.message || String(e));
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <View style={{ flex:1, padding:24, gap:16 }}>
-      <Text style={{ fontSize:22, fontWeight:"600", marginTop:24 }}>Bekræft din e-mail</Text>
-      <Text>Vi har brug for at bekræfte din e-mail, før du kan bruge appen.</Text>
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.container}>
+        <View style={styles.hero}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeEmoji}>✉️</Text>
+          </View>
 
-      <TouchableOpacity onPress={resend} disabled={busy} style={{ padding:12 }}>
-        <Text style={{ color:"#0B6EEF", fontSize:18 }}>Send verifikationsmail igen</Text>
-      </TouchableOpacity>
+          <Text style={styles.title}>Bekræft din e-mail</Text>
 
-      <TouchableOpacity onPress={check} disabled={busy} style={{ padding:12 }}>
-        <Text style={{ color:"#0B6EEF", fontSize:18 }}>Jeg har bekræftet – tjek igen</Text>
-      </TouchableOpacity>
+          {!!email && (
+            <Text style={styles.subtitle}>
+              Vi har sendt en bekræftelse til{" "}
+              <Text style={styles.subtitleBold}>{email}</Text>.
+            </Text>
+          )}
+          <Text style={styles.helper}>
+            Åbn mailen og klik på linket for at aktivere din konto.
+          </Text>
+        </View>
 
-      <View style={{ height:12 }} />
-      <TouchableOpacity onPress={doLogout} disabled={busy} style={{ padding:12 }}>
-        <Text style={{ color:"#e11d48", fontSize:16 }}>Log ud</Text>
-      </TouchableOpacity>
-    </View>
+        <View style={styles.actions}>
+          <TouchableOpacity
+            onPress={resend}
+            disabled={busy}
+            activeOpacity={0.9}
+            style={[styles.buttonPrimary, busy && styles.buttonDisabled]}
+          >
+            <Text style={styles.buttonPrimaryText}>Send verifikationsmail igen</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={check}
+            disabled={busy}
+            activeOpacity={0.9}
+            style={[styles.buttonSecondary, busy && styles.buttonDisabled]}
+          >
+            <Text style={styles.buttonSecondaryText}>Jeg har bekræftet – tjek igen</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={doLogout}
+            disabled={busy}
+            activeOpacity={0.9}
+            style={[styles.buttonGhostDanger, busy && styles.buttonDisabled]}
+          >
+            <Text style={styles.buttonGhostDangerText}>Log ud</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {busy && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" />
+        </View>
+      )}
+    </SafeAreaView>
   );
 }

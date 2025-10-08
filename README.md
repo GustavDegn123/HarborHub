@@ -1,15 +1,6 @@
- Sikr at push sendes kun fra server (hvis du ikke allerede gør det).
-
- Slå email-verifikation til i Firebase Auth.
-
-7. Mail og SMS
-4. Notifikationer på appen (Virker med bud på jobs)
-8. Sikkerhed?
-9. Host app udenfom app store
-10. Facebook, Google og Apple
-11. Del tekst og/eller indhold til facebook, instagram, snapchat, noter osv
-Microsoft authenticator
-Skriv til malthe
+4. Notifikationer på appen (Virker med bud på jobs) Ongoing
+4. Mail med ordre bekræftelse og notifikationer
+10. Facebook + Google
 
 A) Minimum for at komme i App Store
 
