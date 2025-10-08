@@ -12,16 +12,11 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import { getUserRole } from "./services/authService";
 
-const extra = Constants.expoConfig?.extra ?? {};
-
 /* Stripe (TEST) */
 import { StripeProvider } from "@stripe/stripe-react-native";
-const STRIPE_PUBLISHABLE_KEY = extra.STRIPE_PUBLISHABLE_KEY;
 
 /* Criipto */
 import { CriiptoVerifyProvider } from "@criipto/verify-expo";
-const CRIIPTO_DOMAIN = extra.CRIIPTO_DOMAIN;
-const CRIIPTO_CLIENT_ID = extra.CRIIPTO_CLIENT_ID;
 
 /* Owner screens */
 import BoatFormScreen from "./components/boatowners/BoatFormScreen";
@@ -54,6 +49,7 @@ import LoginScreen from "./components/shared/LoginScreen";
 import SignUpScreen from "./components/shared/SignUpScreen";
 import PasswordResetScreen from "./components/shared/PasswordResetScreen";
 import ChatScreen from "./components/shared/ChatScreen";
+import VerifyEmailScreen from "./components/shared/VerifyEmailScreen";
 
 /* Notifications utils + navigation ref */
 import {
@@ -63,6 +59,12 @@ import {
 } from "./utils/notifications";
 import { navigationRef } from "./navigation/navRef";
 
+/* ---- env/extra ---- */
+const extra = Constants.expoConfig?.extra ?? {};
+const STRIPE_PUBLISHABLE_KEY = extra.STRIPE_PUBLISHABLE_KEY;
+const CRIIPTO_DOMAIN = extra.CRIIPTO_DOMAIN;
+const CRIIPTO_CLIENT_ID = extra.CRIIPTO_CLIENT_ID;
+
 const Stack = createNativeStackNavigator();
 
 const linking = {
@@ -71,20 +73,35 @@ const linking = {
 
 export default function App() {
   const [initializing, setInitializing] = useState(true);
-  const [user, setUser] = useState(null); // { ...firebaseUser, role }
+  // shape: null | { ...firebaseUser, role?: 'owner'|'provider'|null, needsVerification?: boolean }
+  const [user, setUser] = useState(null);
 
-  // Auth state + hent rolle
+  // Auth state + email verification + rolle
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
-        if (firebaseUser) {
-          const role = await getUserRole(firebaseUser.uid);
-          setUser({ ...firebaseUser, role: role || null });
-        } else {
+        if (!firebaseUser) {
           setUser(null);
+          return;
+        }
+
+        // Sørg for friske claims
+        await firebaseUser.reload();
+
+        const providerId = firebaseUser.providerData?.[0]?.providerId || "password";
+        const needsVerification =
+          providerId === "password" && firebaseUser.emailVerified !== true;
+
+        if (needsVerification) {
+          // Vis VerifyEmail-screen; hent ikke rolle endnu (regler kan blokere).
+          setUser({ ...firebaseUser, role: null, needsVerification: true });
+        } else {
+          // Verified (eller social login) -> hent rolle
+          const role = await getUserRole(firebaseUser.uid);
+          setUser({ ...firebaseUser, role: role || null, needsVerification: false });
         }
       } catch (err) {
-        console.error("Fejl ved hentning af rolle:", err);
+        console.error("Auth bootstrap fejl:", err);
         setUser(firebaseUser ? { ...firebaseUser, role: null } : null);
       } finally {
         setInitializing(false);
@@ -99,7 +116,6 @@ export default function App() {
     askNotificationPermission();
 
     const removeTap = attachNotificationTapListener();
-    // (Valgfrit) debug-lyttere
     const subReceived = Notifications.addNotificationReceivedListener(() => {});
     const subResponse = Notifications.addNotificationResponseReceivedListener(() => {});
     return () => {
@@ -131,7 +147,14 @@ export default function App() {
             }}
           >
             {user ? (
-              user.role === "owner" ? (
+              user.needsVerification ? (
+                // Password-bruger uden verified e-mail
+                <Stack.Screen
+                  name="VerifyEmail"
+                  component={VerifyEmailScreen}
+                  options={{ title: "Bekræft e-mail" }}
+                />
+              ) : user.role === "owner" ? (
                 <>
                   {/* OWNER ROOT (tabs) */}
                   <Stack.Screen
@@ -139,7 +162,6 @@ export default function App() {
                     component={OwnerTabs}
                     options={{ headerShown: false }}
                   />
-
                   {/* Owner stack-sider */}
                   <Stack.Screen
                     name="BoatForm"

@@ -1,3 +1,7 @@
+ Sikr at push sendes kun fra server (hvis du ikke allerede gør det).
+
+ Slå email-verifikation til i Firebase Auth.
+
 7. Mail og SMS
 4. Notifikationer på appen (Virker med bud på jobs)
 8. Sikkerhed?
