@@ -5,21 +5,23 @@ import * as Linking from "expo-linking";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 
 /* Firebase */
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import { getUserRole } from "./services/authService";
 
+const extra = Constants.expoConfig?.extra ?? {};
+
 /* Stripe (TEST) */
 import { StripeProvider } from "@stripe/stripe-react-native";
-const STRIPE_PUBLISHABLE_KEY =
-  "pk_test_51SCjjXAaF7MIn0TOcUx6zljX4uVT4AomV81qmaVc8rmtx3skPdLyBO5zrVvSr6eo1EGESawEX581kl4aM5G2CR9O00NvG1eDtd";
+const STRIPE_PUBLISHABLE_KEY = extra.STRIPE_PUBLISHABLE_KEY;
 
 /* Criipto */
 import { CriiptoVerifyProvider } from "@criipto/verify-expo";
-const CRIIPTO_DOMAIN = "harborhub-test.criipto.id";
-const CRIIPTO_CLIENT_ID = "urn:my:application:identifier:839484";
+const CRIIPTO_DOMAIN = extra.CRIIPTO_DOMAIN;
+const CRIIPTO_CLIENT_ID = extra.CRIIPTO_CLIENT_ID;
 
 /* Owner screens */
 import BoatFormScreen from "./components/boatowners/BoatFormScreen";

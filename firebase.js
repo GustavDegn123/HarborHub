@@ -1,31 +1,43 @@
-// firebase.js
-import { initializeApp } from "firebase/app";
-import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+// firebase.js (JS, not TS)
+import { initializeApp, getApps, getApp } from "firebase/app";
+import {
+  initializeAuth,
+  getAuth,
+  getReactNativePersistence,
+} from "firebase/auth";
 import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import Constants from "expo-constants";
 
-// Din Firebase config
+const extra = Constants.expoConfig?.extra || {};
+
 const firebaseConfig = {
-  apiKey: "AIzaSyCyiOE2Wa5FJYy7mwt3yTdaMPGQI-qIcqg",
-  authDomain: "harborhub-f15de.firebaseapp.com",
-  projectId: "harborhub-f15de",
-  storageBucket: "harborhub-f15de.firebasestorage.app",
-  messagingSenderId: "16622525056",
-  appId: "1:16622525056:web:cc30d1c66367b08cfa2465",
-  measurementId: "G-S53BY4B59T",
+  apiKey: extra.FIREBASE_API_KEY,
+  authDomain: extra.FIREBASE_AUTH_DOMAIN,
+  projectId: extra.FIREBASE_PROJECT_ID,
+  storageBucket: extra.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: extra.FIREBASE_MESSAGING_SENDER_ID,
+  appId: extra.FIREBASE_APP_ID,
+  measurementId: extra.FIREBASE_MEASUREMENT_ID,
 };
 
-// 👇 VIGTIGT: eksporter app
-export const app = initializeApp(firebaseConfig);
+// Ensure a single app instance
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Auth
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(ReactNativeAsyncStorage),
-});
+// Auth: initialize once, otherwise re-use existing
+let auth;
+try {
+  // If auth already exists for this app, this works and does NOT re-init
+  auth = getAuth(app);
+} catch (e) {
+  // First time in RN: initialize with persistence
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+  });
+}
 
-// Firestore
-export const db = getFirestore(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
 
-// Storage
-export const storage = getStorage(app);
+export { app, auth, db, storage };
