@@ -1,6 +1,9 @@
 4. Notifikationer på appen (Virker med bud på jobs) Ongoing
 4. Mail med ordre bekræftelse og notifikationer
 10. Facebook + Google
+11. Optimere UI
+
+
 
 A) Minimum for at komme i App Store
 
