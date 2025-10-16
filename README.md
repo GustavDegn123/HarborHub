@@ -1,7 +1,35 @@
-4. Notifikationer på appen (Virker med bud på jobs) Ongoing
-4. Mail med ordre bekræftelse og notifikationer
+HarborHub ⚓ (GK2)
+
+HarborHub er en React Native–MVP, der matcher bådejere med maritime serviceudbydere via gennemsigtig budgivning, booking og betaling.
+Denne version er udviklet til Godkendelsesopgave 2 (Innovation, CBS) med fokus på anden runde brugerinddragelse og en funktionel MVP.
+
+Demovideo: (indsæt YouTube-link)
+
+# Klon repo
+git clone https://github.com/GustavDegn123/HarborHub.git
+cd HarborHub
+
+# Installér afhængigheder
+npm install
+
+# (Valgfrit) Opret env-konfig
+cp .env.example .env
+# Udfyld dine Firebase-nøgler eller indsæt direkte i firebase.js
+
+# Start (Expo)
+npm start
+# Scan QR i Expo Go (iOS/Android) eller tryk i/a/w for iOS/Android/Web
+
+
+
+
+4. Notifikationer på appen (Virker med bud på jobs) Ongoing 
+4. Mail med ordre bekræftelse
 10. Facebook + Google
 11. Optimere UI
+12. Optimere koden generelt med styles osv
+13. Flere Services
+14. E-mail sendes videre når man har bekræftet
 
 
 

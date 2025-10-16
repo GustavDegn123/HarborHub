@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, Image, Alert } from "react-native";
 import * as Google from "expo-auth-session/providers/google";
+import * as Facebook from "expo-auth-session/providers/facebook";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -29,6 +30,16 @@ export default function LoginScreen({ navigation }) {
     }),
   });
 
+  /* ---------------- Facebook login ---------------- */
+  const [fbRequest, fbResponse, fbPromptAsync] = Facebook.useAuthRequest({
+    clientId: Constants.expoConfig?.extra?.FACEBOOK_APP_ID,
+    scopes: ["public_profile", "email"],
+    redirectUri: makeRedirectUri({
+      scheme: "harborhub",
+      useProxy: Constants.appOwnership === "expo",
+    }),
+  });
+
   useEffect(() => {
     if (response?.type === "success") {
       // Nogle versioner lægger token i response.params.id_token, andre i response.authentication.idToken
@@ -51,6 +62,31 @@ export default function LoginScreen({ navigation }) {
         });
     }
   }, [response]);
+
+    // Facebook-respons
+  useEffect(() => {
+    if (fbResponse?.type === "success") {
+      const accessToken = fbResponse.authentication?.accessToken || null;
+      if (!accessToken) {
+        Alert.alert("Facebook login", "Kunne ikke hente accessToken fra Facebook-responsen.");
+        return;
+      }
+      firebaseFacebookLogin(accessToken)
+        .then((user) => {
+          const emailTxt = user?.email || "bruger";
+          Alert.alert("Facebook login", `✅ Velkommen ${emailTxt}`);
+        })
+        .catch((err) => {
+          console.error("Facebook login fejl:", err);
+          // Hyppig case: account-exists-with-different-credential
+          const msg =
+            err?.code === "auth/account-exists-with-different-credential"
+              ? "Der findes allerede en konto med denne e-mail via en anden login-udbyder. Prøv at logge ind med Google eller e-mail."
+             : err?.message || "Uventet fejl ved Facebook login.";
+          Alert.alert("Facebook login fejl", msg);
+        });
+    }
+}, [fbResponse]);
 
   /* ---------------- Email + password ---------------- */
   const handleEmailLogin = async () => {
