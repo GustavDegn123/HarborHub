@@ -3,7 +3,7 @@ HarborHub ⚓ (GK2)
 HarborHub er en React Native–MVP, der matcher bådejere med maritime serviceudbydere via gennemsigtig budgivning, booking og betaling.
 Denne version er udviklet til Godkendelsesopgave 2 (Innovation, CBS) med fokus på anden runde brugerinddragelse og en funktionel MVP.
 
-Demovideo: (indsæt YouTube-link)
+Demovideo: https://www.youtube.com/watch?v=CdDviwTYs-4
 
 # Klon repo
 git clone https://github.com/GustavDegn123/HarborHub.git
@@ -21,9 +21,9 @@ npm start
 # Scan QR i Expo Go (iOS/Android) eller tryk i/a/w for iOS/Android/Web
 
 
-
-
 4. Notifikationer på appen (Virker med bud på jobs) Ongoing 
+5. Tilføjer ikke den oprettede båd med det samme
+6. Skifter ikke profilbillede med det samme
 4. Mail med ordre bekræftelse
 10. Facebook + Google
 11. Optimere UI
