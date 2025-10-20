@@ -94,13 +94,17 @@ module.exports = {
     FIREBASE_APP_ID: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
     FIREBASE_MEASUREMENT_ID: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 
-    // (Optional) Google OAuth client IDs for expo-auth-session (if you move them off hardcoded values)
+    // Google OAuth client IDs (optional)
     GOOGLE_EXPO_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
     GOOGLE_IOS_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
     GOOGLE_ANDROID_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
     GOOGLE_WEB_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
 
-    // EAS Project (already linked, but keeping for completeness)
+    // Facebook (public app id for expo-auth-session)
+    FACEBOOK_APP_ID:
+      process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || "1214898343801009",
+
+    // EAS Project
     eas: {
       projectId: "02ce5b94-a91d-415e-9f67-20d7006f114c",
     },

@@ -7,16 +7,29 @@ import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../firebase";
-import { firebaseGoogleLogin } from "../../services/authService";
+import { firebaseGoogleLogin, firebaseFacebookLogin } from "../../services/authService";
 import Constants from "expo-constants";
 import styles from "../../styles/shared/loginStyles";
 
-// Sørger for at Google redirect ikke hænger
+// Sørger for at auth-session redirect ikke hænger i browseren
 WebBrowser.maybeCompleteAuthSession();
+
+/** IMPORTANT:
+ * I udvikling vil vi T-V-I-N-G-E Expo proxy'en.
+ * Derfor hardcoder vi redirectUri til auth.expo.io i stedet for makeRedirectUri.
+ * (makeRedirectUri kan i nogle setups returnere exp:// selv med useProxy=true).
+ */
+const REDIRECT_URI = "https://auth.expo.io/@gustavdegn/harborhub";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // Debug: vis hvilke værdier der bruges
+  useEffect(() => {
+    console.log("FB APP ID =", Constants.expoConfig?.extra?.FACEBOOK_APP_ID);
+    console.log("Auth redirectUri =", REDIRECT_URI);
+  }, []);
 
   /* ---------------- Google login ---------------- */
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -24,27 +37,21 @@ export default function LoginScreen({ navigation }) {
     iosClientId: "16622525056-7pgliodrdtnruh16cobp7kjb8h838g58.apps.googleusercontent.com",
     androidClientId: "16622525056-3j94ogkp9q6gs2bn0p1q2q50iv9dt0q1.apps.googleusercontent.com",
     webClientId: "16622525056-i5cbljlogf92qbdc505gcbrn8cne8r48.apps.googleusercontent.com",
-    redirectUri: makeRedirectUri({
-      scheme: "harborhub",
-      useProxy: Constants.appOwnership === "expo", // Expo Go bruger proxy
-    }),
+    redirectUri: REDIRECT_URI, // 👈 fast proxy-URL
   });
 
   /* ---------------- Facebook login ---------------- */
   const [fbRequest, fbResponse, fbPromptAsync] = Facebook.useAuthRequest({
     clientId: Constants.expoConfig?.extra?.FACEBOOK_APP_ID,
     scopes: ["public_profile", "email"],
-    redirectUri: makeRedirectUri({
-      scheme: "harborhub",
-      useProxy: Constants.appOwnership === "expo",
-    }),
+    redirectUri: REDIRECT_URI, // 👈 fast proxy-URL
   });
 
+  // Google-respons
   useEffect(() => {
     if (response?.type === "success") {
-      // Nogle versioner lægger token i response.params.id_token, andre i response.authentication.idToken
       const idToken =
-        response.params?.id_token || response.authentication?.idToken || null;
+        response?.params?.id_token || response?.authentication?.idToken || null;
 
       if (!idToken) {
         Alert.alert("Google login", "Kunne ikke hente id_token fra Google-responsen.");
@@ -63,14 +70,15 @@ export default function LoginScreen({ navigation }) {
     }
   }, [response]);
 
-    // Facebook-respons
+  // Facebook-respons
   useEffect(() => {
     if (fbResponse?.type === "success") {
-      const accessToken = fbResponse.authentication?.accessToken || null;
+      const accessToken = fbResponse?.authentication?.accessToken || null;
       if (!accessToken) {
         Alert.alert("Facebook login", "Kunne ikke hente accessToken fra Facebook-responsen.");
         return;
       }
+
       firebaseFacebookLogin(accessToken)
         .then((user) => {
           const emailTxt = user?.email || "bruger";
@@ -78,15 +86,14 @@ export default function LoginScreen({ navigation }) {
         })
         .catch((err) => {
           console.error("Facebook login fejl:", err);
-          // Hyppig case: account-exists-with-different-credential
           const msg =
             err?.code === "auth/account-exists-with-different-credential"
               ? "Der findes allerede en konto med denne e-mail via en anden login-udbyder. Prøv at logge ind med Google eller e-mail."
-             : err?.message || "Uventet fejl ved Facebook login.";
+              : err?.message || "Uventet fejl ved Facebook login.";
           Alert.alert("Facebook login fejl", msg);
         });
     }
-}, [fbResponse]);
+  }, [fbResponse]);
 
   /* ---------------- Email + password ---------------- */
   const handleEmailLogin = async () => {
@@ -112,10 +119,11 @@ export default function LoginScreen({ navigation }) {
         <Text style={styles.appleText}> Log ind med Apple</Text>
       </TouchableOpacity>
 
-      {/* Facebook Login (placeholder) */}
+      {/* Facebook Login (AKTIV) */}
       <TouchableOpacity
         style={[styles.socialButton, styles.facebookButton]}
-        onPress={() => Alert.alert("Facebook login", "Ikke implementeret endnu.")}
+        disabled={!fbRequest}
+        onPress={() => fbPromptAsync()}
       >
         <View style={styles.socialContent}>
           <Image source={require("../../assets/facebook.png")} style={styles.icon} />
