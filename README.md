@@ -21,14 +21,15 @@ npm start
 # Scan QR i Expo Go (iOS/Android) eller tryk i/a/w for iOS/Android/Web
 
 
-4. Notifikationer på appen (Virker med bud på jobs) Ongoing 
+4. Få helt styr på styles og logik i filer 
+Notifikationer på appen (Virker med bud på jobs) Ongoing 
 5. Tilføjer ikke den oprettede båd med det samme
 6. Skifter ikke profilbillede med det samme
 4. Mail med ordre bekræftelse
 10. Facebook + Google
 11. Optimere UI
 12. Optimere koden generelt med styles osv
-13. Flere Services
+13. Flere Services-filer
 14. E-mail sendes videre når man har bekræftet
 
 
