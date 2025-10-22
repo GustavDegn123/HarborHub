@@ -611,9 +611,6 @@ export default function ProviderProfileScreen({ navigation }) {
           ))}
           {/* ⚠️ Faresone: Slet konto */}
 <DeleteAccountSection
-  onDeleted={() =>
-    navigation.reset({ index: 0, routes: [{ name: "LoginScreen" }] })
-  }
   style={{ marginTop: 16, marginBottom: 12 }}
 />
         </View>

@@ -196,9 +196,6 @@ export default function ProfileHubScreen({ navigation }) {
 
         {/* ⚠️ Faresone: Slet konto (opfylder App Store-krav) */}
         <DeleteAccountSection
-          onDeleted={() =>
-            navigation.reset({ index: 0, routes: [{ name: "LoginScreen" }] })
-          }
           style={{ marginTop: 16 }}
         />
       </View>
