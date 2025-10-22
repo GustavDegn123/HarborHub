@@ -8,6 +8,7 @@ import * as ImagePicker from "expo-image-picker";
 import { updateProfile } from "firebase/auth";
 
 import styles from "../../styles/boatowners/profileHubStyles";
+import DeleteAccountSection from "../shared/DeleteAccountSection";
 import { logout } from "../../services/authService";
 import { auth, storage } from "../../firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -189,10 +190,17 @@ export default function ProfileHubScreen({ navigation }) {
           <MenuItem icon="person-circle-outline" label="Personlige detaljer" onPress={() => go("BoatProfile")} />
           <Separator />
           <MenuItem icon="checkmark-done-outline" label="Afsluttede opgaver" onPress={() => go("OwnerHistory")} />
-           
-          <MenuItem icon="chatbubble-ellipses-outline" label="Chatbot" onPress={() => go("ChatBot")}
-          />
+          <Separator />
+          <MenuItem icon="chatbubble-ellipses-outline" label="Chatbot" onPress={() => go("ChatBot")} />
         </View>
+
+        {/* ⚠️ Faresone: Slet konto (opfylder App Store-krav) */}
+        <DeleteAccountSection
+          onDeleted={() =>
+            navigation.reset({ index: 0, routes: [{ name: "LoginScreen" }] })
+          }
+          style={{ marginTop: 16 }}
+        />
       </View>
 
       {/* Nedtonet 'Log ud' helt ned mod tab-baren */}

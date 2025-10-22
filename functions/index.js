@@ -28,6 +28,8 @@ function allowCORS(req, res) {
   return false;
 }
 
+exports.deleteUserData = require("./deleteUserData").deleteUserData;
+
 /**
  * 👉 Create PaymentIntent til et job
  */

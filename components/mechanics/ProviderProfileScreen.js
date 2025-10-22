@@ -33,6 +33,7 @@ import {
 } from "../../services/providersService";
 import { useCriiptoVerify } from "@criipto/verify-expo";
 import styles, { COLORS } from "../../styles/mechanics/providerProfileStyles";
+import DeleteAccountSection from "../shared/DeleteAccountSection";
 import { logout } from "../../services/authService";
 
 // Sørg for at AuthSession færdiggøres når vi vender tilbage fra browser
@@ -608,6 +609,13 @@ export default function ProviderProfileScreen({ navigation }) {
               </View>
             </View>
           ))}
+          {/* ⚠️ Faresone: Slet konto */}
+<DeleteAccountSection
+  onDeleted={() =>
+    navigation.reset({ index: 0, routes: [{ name: "LoginScreen" }] })
+  }
+  style={{ marginTop: 16, marginBottom: 12 }}
+/>
         </View>
       )}
     </ScrollView>
