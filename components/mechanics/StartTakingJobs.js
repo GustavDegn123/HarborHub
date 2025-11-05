@@ -14,7 +14,7 @@ import * as Location from "expo-location";
 import { geohashForLocation } from "geofire-common";
 import { getAuth } from "firebase/auth";
 
-import styles from "../../styles/mechanics/startTakingJobsStyles";
+import styles, { sliderColors } from "../../styles/mechanics/startTakingJobsStyles";
 import { saveProviderProfile, setUserRole } from "../../services/providersService";
 
 export default function StartTakingJobs({ navigation, route }) {
@@ -56,7 +56,6 @@ export default function StartTakingJobs({ navigation, route }) {
     if (pl?.lat && pl?.lng) {
       setPicked({ lat: pl.lat, lng: pl.lng, label: pl.label || "" });
       if (pl.label) setHomeAddress(pl.label);
-      // Når man kommer tilbage fra kortet → vis formularen
       setShowIntro(false);
     }
   }, [route?.params?.pickedLocation]);
@@ -126,7 +125,6 @@ export default function StartTakingJobs({ navigation, route }) {
     }
   }, [user, km, homeAddress, workAreaAddress, picked, geocodeAddress, navigation, openMap]);
 
-  // Tilbage til introen (startsiden på billedet) – nulstiller også formularen let
   const onSkip = useCallback(() => {
     setKm(30);
     setHomeAddress("");
@@ -135,9 +133,9 @@ export default function StartTakingJobs({ navigation, route }) {
     setShowIntro(true);
   }, []);
 
-  /* -------------------- RENDER -------------------- */
+  /* ---------- RENDER ---------- */
 
-  // Intro view
+  // Intro
   if (showIntro) {
     return (
       <View style={styles.introScreen}>
@@ -162,7 +160,7 @@ export default function StartTakingJobs({ navigation, route }) {
     );
   }
 
-  // Formular view
+  // Formular
   return (
     <KeyboardAvoidingView
       style={styles.screen}
@@ -179,9 +177,9 @@ export default function StartTakingJobs({ navigation, route }) {
           minimumValue={0}
           maximumValue={200}
           step={1}
-          minimumTrackTintColor="#1f5c7d"
-          maximumTrackTintColor="#c8d6df"
-          thumbTintColor="#1f5c7d"
+          minimumTrackTintColor={sliderColors.minimumTrack}
+          maximumTrackTintColor={sliderColors.maximumTrack}
+          thumbTintColor={sliderColors.thumb}
           accessibilityLabel="Maksimal afstand i kilometer"
         />
 

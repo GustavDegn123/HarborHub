@@ -3,7 +3,7 @@ import { View, Text, FlatList, ActivityIndicator, TouchableOpacity } from "react
 import { getAuth } from "firebase/auth";
 import { db } from "../../firebase";
 import { collection, onSnapshot, query, orderBy, doc, getDoc } from "firebase/firestore";
-import styles from "../../styles/mechanics/jobsFeedStyles";
+import styles from "../../styles/mechanics/assignedJobsStyles"; // ← new, dedicated styles
 
 function DKK(n) {
   return Number.isFinite(Number(n))
@@ -15,17 +15,15 @@ export default function AssignedJobsScreen({ navigation }) {
   const uid = getAuth().currentUser?.uid;
 
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState([]);        // rå rows fra providers/{uid}/assigned_jobs
-  const [jobsMap, setJobsMap] = useState({});  // job_id -> service_request data
+  const [rows, setRows] = useState([]);
+  const [jobsMap, setJobsMap] = useState({});
 
-  // 1) Lyt på mine tildelte jobs (providers/{uid}/assigned_jobs)
   useEffect(() => {
     if (!uid) {
       setLoading(false);
       setRows([]);
       return;
     }
-    // sortér nyeste tildelinger først (falls back hvis felt mangler)
     const qRef = query(
       collection(db, "providers", uid, "assigned_jobs"),
       orderBy("assigned_at", "desc")
@@ -34,7 +32,7 @@ export default function AssignedJobsScreen({ navigation }) {
     const off = onSnapshot(
       qRef,
       (snap) => {
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         setRows(list);
         setLoading(false);
       },
@@ -46,13 +44,12 @@ export default function AssignedJobsScreen({ navigation }) {
     return off;
   }, [uid]);
 
-  // 2) Hent tilhørende service_requests (join)
   useEffect(() => {
     let alive = true;
     (async () => {
       const missing = rows
-        .map(r => r.job_id || r.id)     // nogle gemmer job_id, andre bruger doc-id=jobId
-        .filter(jobId => jobId && !jobsMap[jobId]);
+        .map((r) => r.job_id || r.id)
+        .filter((jobId) => jobId && !jobsMap[jobId]);
 
       if (missing.length === 0) return;
 
@@ -66,27 +63,26 @@ export default function AssignedJobsScreen({ navigation }) {
         }
       }
       if (alive && Object.keys(entries).length) {
-        setJobsMap(prev => ({ ...prev, ...entries }));
+        setJobsMap((prev) => ({ ...prev, ...entries }));
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 3) Byg liste-elementer med join + filtrér på status (assigned/in_progress)
   const items = useMemo(() => {
-    const enriched = rows.map(r => {
+    const enriched = rows.map((r) => {
       const jobId = r.job_id || r.id;
       const job = jobsMap[jobId] || null;
-      // status: foretræk provider-subdoc status; fallback til job.status
       const status = String(r.status || job?.status || "").toLowerCase();
       const inProgress = status === "in_progress";
       const assigned = status === "assigned";
 
-      // pris: foretræk accepteret pris / subdoc price, fallback til job.acceptedPrice/budget
       const price =
-        Number.isFinite(Number(r.price)) ? r.price
-        : Number.isFinite(Number(job?.acceptedPrice)) ? job.acceptedPrice
-        : job?.budget;
+        Number.isFinite(Number(r.price)) ? r.price :
+        Number.isFinite(Number(job?.acceptedPrice)) ? job.acceptedPrice :
+        job?.budget;
 
       return {
         key: jobId,
@@ -97,33 +93,24 @@ export default function AssignedJobsScreen({ navigation }) {
         description: job?.description || "",
         owner_id: job?.owner_id,
         acceptedPrice: price,
-        job, // til navigation
+        job,
       };
     });
 
-    // hold kun assigned + in_progress
-    const visible = enriched.filter(x => x.assigned || x.inProgress);
+    const visible = enriched.filter((x) => x.assigned || x.inProgress);
 
-    // sortering: assigned_at (fra subdoc) falder tilbage til job.updated_at
     visible.sort((a, b) => {
-      const ra = rows.find(r => (r.job_id || r.id) === a.key);
-      const rb = rows.find(r => (r.job_id || r.id) === b.key);
-      const ta =
-        ra?.assigned_at?.toMillis?.() ||
-        a.job?.updated_at?.toMillis?.() ||
-        0;
-      const tb =
-        rb?.assigned_at?.toMillis?.() ||
-        b.job?.updated_at?.toMillis?.() ||
-        0;
+      const ra = rows.find((r) => (r.job_id || r.id) === a.key);
+      const rb = rows.find((r) => (r.job_id || r.id) === b.key);
+      const ta = ra?.assigned_at?.toMillis?.() || a.job?.updated_at?.toMillis?.() || 0;
+      const tb = rb?.assigned_at?.toMillis?.() || b.job?.updated_at?.toMillis?.() || 0;
       return tb - ta;
     });
 
     return visible;
   }, [rows, jobsMap]);
 
-  const openDetails = (jobId) =>
-    navigation.navigate("JobDetail", { jobId });
+  const openDetails = (jobId) => navigation.navigate("JobDetail", { jobId });
 
   const openChat = (job) =>
     navigation.navigate("Chat", {

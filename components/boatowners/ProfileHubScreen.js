@@ -1,17 +1,25 @@
-// components/boatowners/ProfileHubScreen.js
 import React, { useMemo, useState } from "react";
-import { View, Text, Pressable, Alert, Image, Platform, ActionSheetIOS } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  Alert,
+  Image,
+  Platform,
+  ActionSheetIOS,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import * as ImagePicker from "expo-image-picker";
 import { updateProfile } from "firebase/auth";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-import styles from "../../styles/boatowners/profileHubStyles";
 import DeleteAccountSection from "../shared/DeleteAccountSection";
 import { logout } from "../../services/authService";
 import { auth, storage } from "../../firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
+import styles, { colors } from "../../styles/boatowners/profileHubStyles";
 
 export default function ProfileHubScreen({ navigation }) {
   const user = auth.currentUser;
@@ -27,7 +35,7 @@ export default function ProfileHubScreen({ navigation }) {
     return parts.map((p) => p[0]?.toUpperCase() || "").join("");
   }, [user?.displayName]);
 
-  // ---- Upload helpers (matcher Storage-reglerne) ----
+  // ---- Upload helpers ----
   function uriToBlob(uri) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -44,10 +52,10 @@ export default function ProfileHubScreen({ navigation }) {
     const uid = user.uid;
 
     const guessed = (localUri.split(".").pop() || "jpg").toLowerCase();
-    const ext = guessed.includes("/") ? "jpg" : guessed; // hvis ingen filendelse
+    const ext = guessed.includes("/") ? "jpg" : guessed;
     const contentType = `image/${ext === "jpg" ? "jpeg" : ext}`;
 
-    // VIGTIGT: ny sti der matcher reglerne: profiles/{uid}/avatar.<ext>
+    // gem som profiles/{uid}/avatar.<ext>
     const storageRef = ref(storage, `profiles/${uid}/avatar.${ext}`);
 
     const blob = await uriToBlob(localUri);
@@ -59,7 +67,10 @@ export default function ProfileHubScreen({ navigation }) {
   async function pickFromLibrary() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Tilladelse mangler", "Giv adgang til billeder for at uploade et profilfoto.");
+      Alert.alert(
+        "Tilladelse mangler",
+        "Giv adgang til billeder for at uploade et profilfoto."
+      );
       return null;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -96,7 +107,7 @@ export default function ProfileHubScreen({ navigation }) {
         setUploading(true);
         const url = await uploadAvatarAsync(uri);
 
-        // cache-bust så billedet refresher i <Image> med det samme
+        // cache-bust så Image opdaterer med det samme
         const bust = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
         await updateProfile(user, { photoURL: bust });
 
@@ -153,7 +164,7 @@ export default function ProfileHubScreen({ navigation }) {
             disabled={uploading}
             style={({ pressed }) => [
               styles.avatar,
-              pressed && { opacity: 0.85, transform: [{ scale: 0.995 }] },
+              pressed && styles.avatarPressed,
             ]}
           >
             {user?.photoURL ? (
@@ -165,7 +176,7 @@ export default function ProfileHubScreen({ navigation }) {
             {/* lille badge i hjørnet – kamera centreret */}
             <View style={styles.avatarEditBadge}>
               <View style={styles.avatarEditCircle}>
-                <Ionicons name="camera" size={13} color="#0B5FA5" />
+                <Ionicons name="camera" size={13} color={colors.primary} />
               </View>
             </View>
           </Pressable>
@@ -194,10 +205,8 @@ export default function ProfileHubScreen({ navigation }) {
           <MenuItem icon="chatbubble-ellipses-outline" label="Chatbot" onPress={() => go("ChatBot")} />
         </View>
 
-        {/* ⚠️ Faresone: Slet konto (opfylder App Store-krav) */}
-        <DeleteAccountSection
-          style={{ marginTop: 16 }}
-        />
+        {/* Slet konto */}
+        <DeleteAccountSection style={styles.deleteSection} />
       </View>
 
       {/* Nedtonet 'Log ud' helt ned mod tab-baren */}
@@ -206,10 +215,10 @@ export default function ProfileHubScreen({ navigation }) {
           onPress={handleLogout}
           style={({ pressed }) => [
             styles.logoutGhost,
-            pressed && { opacity: 0.7, transform: [{ scale: 0.997 }] },
+            pressed && styles.logoutGhostPressed,
           ]}
         >
-          <Ionicons name="log-out-outline" size={18} color="#ef4444" />
+          <Ionicons name="log-out-outline" size={18} color={colors.danger} />
           <Text style={styles.logoutGhostText}>Log ud</Text>
         </Pressable>
       </View>
@@ -226,10 +235,10 @@ function MenuItem({ icon, label, onPress }) {
       style={({ pressed }) => [styles.itemRow, pressed && styles.itemRowPressed]}
     >
       <View style={styles.itemIconWrap}>
-        <Ionicons name={icon} size={18} color="#0B5FA5" />
+        <Ionicons name={icon} size={18} color={colors.primary} />
       </View>
       <Text style={styles.itemLabel}>{label}</Text>
-      <Ionicons name="chevron-forward" size={18} color="#94a3b8" style={{ marginLeft: "auto" }} />
+      <Ionicons name="chevron-forward" size={18} color={colors.iconMuted} style={styles.itemChevron} />
     </Pressable>
   );
 }

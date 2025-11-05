@@ -22,7 +22,7 @@ import { geohashForLocation } from "geofire-common";
 import { getBoats } from "../../services/boatsService";
 import { addRequest } from "../../services/requestsService";
 
-import styles from "../../styles/boatowners/newRequestStyles";
+import styles, { colors } from "../../styles/boatowners/newRequestStyles";
 
 export default function NewRequestScreen({ navigation, route }) {
   const [boats, setBoats] = useState([]);
@@ -40,8 +40,8 @@ export default function NewRequestScreen({ navigation, route }) {
   const [image, setImage] = useState(null);
 
   // Placering
-  const [picked, setPicked] = useState(null);         // { lat, lng, label }
-  const [address, setAddress] = useState("");         // manuel adresse
+  const [picked, setPicked] = useState(null); // { lat, lng, label }
+  const [address, setAddress] = useState(""); // manuel adresse
 
   useEffect(() => {
     const loadBoats = async () => {
@@ -73,10 +73,15 @@ export default function NewRequestScreen({ navigation, route }) {
   }, [navigation, picked]);
 
   const geocodeAddress = useCallback(async () => {
-    if (!address.trim()) return Alert.alert("Adresse mangler", "Skriv en adresse.");
+    if (!address.trim())
+      return Alert.alert("Adresse mangler", "Skriv en adresse.");
     try {
       const res = await Location.geocodeAsync(address.trim());
-      if (!res?.length) return Alert.alert("Ikke fundet", "Kunne ikke finde adressen. Vælg på kortet i stedet.");
+      if (!res?.length)
+        return Alert.alert(
+          "Ikke fundet",
+          "Kunne ikke finde adressen. Vælg på kortet i stedet."
+        );
       const { latitude, longitude } = res[0];
       setPicked({ lat: latitude, lng: longitude, label: address.trim() });
       Alert.alert("OK", "Placering sat ud fra adressen.");
@@ -140,7 +145,10 @@ export default function NewRequestScreen({ navigation, route }) {
     if (!boatId) return Alert.alert("Fejl", "Vælg en båd først.");
     if (!budget) return Alert.alert("Fejl", "Indtast et budget.");
     if (!picked?.lat || !picked?.lng) {
-      return Alert.alert("Vælg placering", "Vælg en placering (adresse eller kort).");
+      return Alert.alert(
+        "Vælg placering",
+        "Vælg en placering (adresse eller kort)."
+      );
     }
 
     try {
@@ -159,7 +167,10 @@ export default function NewRequestScreen({ navigation, route }) {
         service_type: serviceType,
         description,
         budget: parseInt(budget, 10),
-        deadline: selectedOption === "Fleksibel" ? "flexible" : Timestamp.fromDate(date),
+        deadline:
+          selectedOption === "Fleksibel"
+            ? "flexible"
+            : Timestamp.fromDate(date),
         deadlineType: selectedOption,
         specificTime: isSpecificTime ? selectedTime : null,
         status: "open",
@@ -167,9 +178,13 @@ export default function NewRequestScreen({ navigation, route }) {
         location,
       });
 
-     Alert.alert("Succes", "Opgave oprettet!",
-      navigation.navigate("OwnerRoot", { screen: "Requests" }));
-
+      Alert.alert("Succes", "Opgave oprettet!", [
+        {
+          text: "OK",
+          onPress: () =>
+            navigation.navigate("OwnerRoot", { screen: "Requests" }),
+        },
+      ]);
     } catch (err) {
       console.error("Fejl ved oprettelse af request:", err);
       Alert.alert("Fejl", "Kunne ikke oprette opgaven.");
@@ -185,7 +200,10 @@ export default function NewRequestScreen({ navigation, route }) {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 24 }}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+    >
       <Text style={styles.header}>Opret ny serviceopgave</Text>
 
       {/* Placering (øverst) */}
@@ -208,11 +226,15 @@ export default function NewRequestScreen({ navigation, route }) {
             <Text style={styles.outlineBtnText}>Brug adressen</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={openMap} style={styles.primaryBtn}>
-            <Text style={styles.primaryBtnText}>{picked ? "Redigér på kort" : "Vælg på kort"}</Text>
+            <Text style={styles.primaryBtnText}>
+              {picked ? "Redigér på kort" : "Vælg på kort"}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {picked?.label ? <Text style={styles.pickedLabel}>Valgt: {picked.label}</Text> : null}
+        {picked?.label ? (
+          <Text style={styles.pickedLabel}>Valgt: {picked.label}</Text>
+        ) : null}
       </View>
 
       {/* Vælg båd */}
@@ -224,10 +246,20 @@ export default function NewRequestScreen({ navigation, route }) {
             return (
               <TouchableOpacity
                 key={b.id}
-                style={[styles.selectButton, active && styles.selectButtonSelected]}
+                style={[
+                  styles.selectButton,
+                  active && styles.selectButtonSelected,
+                ]}
                 onPress={() => setBoatId(b.id)}
               >
-                <Text style={[styles.selectButtonText, active && styles.selectButtonTextSelected]}>{b.name}</Text>
+                <Text
+                  style={[
+                    styles.selectButtonText,
+                    active && styles.selectButtonTextSelected,
+                  ]}
+                >
+                  {b.name}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -238,16 +270,33 @@ export default function NewRequestScreen({ navigation, route }) {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Service</Text>
         <View style={styles.buttonGrid}>
-          {["Bundmaling", "Vinteropbevaring", "Reparation", "Elarbejde", "Riggerservice", "Polering"].map((type) => {
+          {[
+            "Bundmaling",
+            "Vinteropbevaring",
+            "Reparation",
+            "Elarbejde",
+            "Riggerservice",
+            "Polering",
+          ].map((type) => {
             const key = type.toLowerCase();
             const active = serviceType === key;
             return (
               <TouchableOpacity
                 key={key}
-                style={[styles.selectButton, active && styles.selectButtonSelected]}
+                style={[
+                  styles.selectButton,
+                  active && styles.selectButtonSelected,
+                ]}
                 onPress={() => setServiceType(key)}
               >
-                <Text style={[styles.selectButtonText, active && styles.selectButtonTextSelected]}>{type}</Text>
+                <Text
+                  style={[
+                    styles.selectButtonText,
+                    active && styles.selectButtonTextSelected,
+                  ]}
+                >
+                  {type}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -276,13 +325,20 @@ export default function NewRequestScreen({ navigation, route }) {
             return (
               <TouchableOpacity
                 key={option}
-                style={[styles.optionButton, active && styles.optionButtonSelected]}
+                style={[
+                  styles.optionButton,
+                  active && styles.optionButtonSelected,
+                ]}
                 onPress={() => {
                   setSelectedOption(option);
                   if (option !== "Fleksibel") setShowDatePicker(true);
                 }}
               >
-                <Text style={[styles.optionText, active && styles.optionTextSelected]}>{option}</Text>
+                <Text
+                  style={[styles.optionText, active && styles.optionTextSelected]}
+                >
+                  {option}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -305,8 +361,14 @@ export default function NewRequestScreen({ navigation, route }) {
         )}
 
         <View style={styles.checkboxContainer}>
-          <Checkbox value={isSpecificTime} onValueChange={setIsSpecificTime} color="#0B5FA5" />
-          <Text style={styles.checkboxLabel}>Det skal være et specifikt tidsrum</Text>
+          <Checkbox
+            value={isSpecificTime}
+            onValueChange={setIsSpecificTime}
+            color={colors.primary}
+          />
+          <Text style={styles.checkboxLabel}>
+            Det skal være et specifikt tidsrum
+          </Text>
         </View>
 
         {isSpecificTime && (
@@ -321,7 +383,10 @@ export default function NewRequestScreen({ navigation, route }) {
               return (
                 <TouchableOpacity
                   key={t.label}
-                  style={[styles.timeButton, active && styles.timeButtonSelected]}
+                  style={[
+                    styles.timeButton,
+                    active && styles.timeButtonSelected,
+                  ]}
                   onPress={() => setSelectedTime(t.label)}
                 >
                   <Text style={styles.timeLabel}>{t.label}</Text>
@@ -334,11 +399,11 @@ export default function NewRequestScreen({ navigation, route }) {
       </View>
 
       {/* Beskrivelse */}
-      <View style={styles.card}>
+      <View className="card" style={styles.card}>
         <Text style={styles.sectionTitle}>Beskrivelse</Text>
         <View style={styles.inputWrapper}>
           <TextInput
-            style={[styles.input, { minHeight: 90 }]}
+            style={[styles.input, styles.inputMultiline]}
             placeholder="Beskriv opgaven"
             value={description}
             onChangeText={setDescription}
@@ -350,7 +415,7 @@ export default function NewRequestScreen({ navigation, route }) {
       {/* Billeder */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Billeder (valgfrit)</Text>
-        <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={styles.imagesRow}>
           <TouchableOpacity style={styles.outlineBtn} onPress={pickImage}>
             <Text style={styles.outlineBtnText}>Fra galleri</Text>
           </TouchableOpacity>
@@ -360,9 +425,9 @@ export default function NewRequestScreen({ navigation, route }) {
         </View>
 
         {image && (
-          <View style={{ alignItems: "center", marginTop: 10 }}>
-            <Image source={{ uri: image }} style={{ width: 220, height: 220, borderRadius: 12 }} />
-            <Text style={{ marginTop: 6, color: "#1E293B" }}>Billede valgt</Text>
+          <View style={styles.imagePreviewWrapper}>
+            <Image source={{ uri: image }} style={styles.imagePreview} />
+            <Text style={styles.imagePreviewLabel}>Billede valgt</Text>
           </View>
         )}
       </View>

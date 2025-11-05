@@ -1,4 +1,3 @@
-// /components/mechanics/ProviderCalendarScreen.js
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -12,8 +11,8 @@ import {
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Calendar, LocaleConfig } from "react-native-calendars";
 import { auth } from "../../firebase";
-import { getAssignedJobsForProvider, listenAssignedJobsForProvider } from "../../services/requestsService";
-import styles from "../../styles/mechanics/jobDetailStyles";
+import { getAssignedJobsForProvider } from "../../services/requestsService";
+import styles, { calendarTheme, STATUS_COLORS } from "../../styles/mechanics/providerCalendarStyles";
 
 /* ---------- Dansk lokalisering til kalender ---------- */
 LocaleConfig.locales["da"] = {
@@ -72,15 +71,6 @@ function ymd(d) {
   return `${y}-${m}-${day}`;
 }
 
-/* ---------- Farver for status (dots) ---------- */
-const STATUS_COLORS = {
-  assigned: "#0A84FF",     // blå
-  in_progress: "#F59E0B",  // orange
-  completed: "#10B981",    // grøn
-  done: "#10B981",
-  open: "#6B7280",         // grå (burde ikke være i kalenderen, men hvis nu…)
-};
-
 export default function ProviderCalendarScreen() {
   const navigation = useNavigation();
   const uid = auth.currentUser?.uid;
@@ -88,7 +78,7 @@ export default function ProviderCalendarScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [jobs, setJobs] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(ymd(new Date())); // dagens dato
+  const [selectedDate, setSelectedDate] = useState(ymd(new Date()));
 
   async function load() {
     if (!uid) return;
@@ -129,7 +119,6 @@ export default function ProviderCalendarScreen() {
       if (!map[k]) map[k] = [];
       map[k].push(job);
     }
-    // Sortér jobs inden i hver dato (tidspunkt)
     Object.keys(map).forEach((k) => {
       map[k].sort((a, b) => {
         const ta = pickEventDate(a)?.getTime?.() || 0;
@@ -143,13 +132,9 @@ export default function ProviderCalendarScreen() {
   // Markeringer i kalenderen (multi-dot pr. dag afhængig af status)
   const markedDates = useMemo(() => {
     const marked = {};
-
-    // dots per dato
     for (const [dateStr, list] of Object.entries(jobsByDate)) {
       if (dateStr === "__uden_dato") continue;
-      const statusSet = new Set(
-        list.map((j) => String(j.status || "").toLowerCase())
-      );
+      const statusSet = new Set(list.map((j) => String(j.status || "").toLowerCase()));
 
       const dots = [];
       for (const s of statusSet) {
@@ -159,7 +144,6 @@ export default function ProviderCalendarScreen() {
       marked[dateStr] = { dots };
     }
 
-    // markér valgt dato
     if (selectedDate) {
       marked[selectedDate] = {
         ...(marked[selectedDate] || {}),
@@ -170,15 +154,16 @@ export default function ProviderCalendarScreen() {
     return marked;
   }, [jobsByDate, selectedDate]);
 
-  const listForSelectedDay = useMemo(() => {
-    return jobsByDate[selectedDate] || [];
-  }, [jobsByDate, selectedDate]);
+  const listForSelectedDay = useMemo(
+    () => jobsByDate[selectedDate] || [],
+    [jobsByDate, selectedDate]
+  );
 
   if (loading) {
     return (
-      <View style={[styles.screen, { alignItems: "center", justifyContent: "center" }]}>
+      <View style={styles.centered}>
         <ActivityIndicator />
-        <Text style={{ marginTop: 8 }}>Henter kalender…</Text>
+        <Text style={styles.centeredText}>Henter kalender…</Text>
       </View>
     );
   }
@@ -192,73 +177,78 @@ export default function ProviderCalendarScreen() {
       <Text style={styles.title}>Min kalender</Text>
 
       {/* LEGEND */}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 8 }}>
-        <LegendDot color="#0A84FF" label="Tildelt" />
-        <LegendDot color="#F59E0B" label="I gang" />
-        <LegendDot color="#10B981" label="Færdig" />
+      <View style={styles.legendWrap}>
+        <LegendDot color={STATUS_COLORS.assigned} label="Tildelt" />
+        <LegendDot color={STATUS_COLORS.in_progress} label="I gang" />
+        <LegendDot color={STATUS_COLORS.completed} label="Færdig" />
       </View>
 
       {/* KALENDER */}
-      <View style={{ marginTop: 10, borderRadius: 12, overflow: "hidden" }}>
+      <View style={styles.calendarWrap}>
         <Calendar
           markingType="multi-dot"
           markedDates={markedDates}
           onDayPress={(day) => setSelectedDate(day.dateString)}
-          firstDay={1} // mandag
+          firstDay={1}
           enableSwipeMonths
-          theme={{
-            todayTextColor: "#0A84FF",
-            arrowColor: "#111827",
-            textDayFontFamily: "System",
-            textMonthFontFamily: "System",
-            textDayHeaderFontFamily: "System",
-          }}
+          theme={calendarTheme}
         />
       </View>
 
       {/* DAGSLISTE */}
-      <View style={{ marginTop: 16 }}>
-        <Text style={{ fontWeight: "700", fontSize: 16, marginBottom: 6 }}>
+      <View style={styles.dayListWrap}>
+        <Text style={styles.dateHeading}>
           {selectedDate ? selectedDate : "Uden dato"}
         </Text>
 
         {listForSelectedDay.length === 0 ? (
-          <Text style={{ color: "#666" }}>Ingen opgaver denne dag.</Text>
+          <Text style={styles.emptyDayText}>Ingen opgaver denne dag.</Text>
         ) : (
-          <View style={{ gap: 10 }}>
+          <View style={styles.dayItems}>
             {listForSelectedDay.map((job) => {
               const d = pickEventDate(job);
-              const timeLabel = d ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : "—";
-              const imageUri = job.imageUrl || job.imageURL || job.photoURL || job.image || null;
+              const timeLabel = d
+                ? `${String(d.getHours()).padStart(2, "0")}:${String(
+                    d.getMinutes()
+                  ).padStart(2, "0")}`
+                : "—";
+              const imageUri =
+                job.imageUrl || job.imageURL || job.photoURL || job.image || null;
               const status = String(job.status || "").toLowerCase();
 
               return (
                 <TouchableOpacity
                   key={job.id}
                   onPress={() => navigation.navigate("JobDetail", { jobId: job.id })}
-                  style={{ borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 12, padding: 12 }}
+                  style={styles.dayItem}
                 >
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                    <Text style={{ fontWeight: "600" }}>{job.service_type || "Serviceopgave"}</Text>
-                    <Text style={{ color: "#666" }}>{timeLabel}</Text>
+                  <View style={styles.dayItemHeader}>
+                    <Text style={styles.dayItemTitle}>
+                      {job.service_type || "Serviceopgave"}
+                    </Text>
+                    <Text style={styles.dayItemTime}>{timeLabel}</Text>
                   </View>
 
-                  <Text style={{ color: "#666", marginTop: 4 }} numberOfLines={2}>
+                  <Text style={styles.dayItemDesc} numberOfLines={2}>
                     {job.description || "—"}
                   </Text>
 
-                  <View style={{ flexDirection: "row", gap: 8, marginTop: 8, alignItems: "center" }}>
+                  <View style={styles.dayItemMetaRow}>
                     <StatusPill status={status} />
                     {job.location && (
-                      <Text style={{ color: "#444" }} numberOfLines={1}>
+                      <Text style={styles.dayItemLocation} numberOfLines={1}>
                         {typeof job.location === "string" ? job.location : "Se detaljer"}
                       </Text>
                     )}
                   </View>
 
                   {imageUri ? (
-                    <View style={{ marginTop: 10, borderRadius: 10, overflow: "hidden" }}>
-                      <Image source={{ uri: imageUri }} style={{ width: "100%", height: 120 }} resizeMode="cover" />
+                    <View style={styles.dayItemImageWrap}>
+                      <Image
+                        source={{ uri: imageUri }}
+                        style={styles.dayItemImage}
+                        resizeMode="cover"
+                      />
                     </View>
                   ) : null}
                 </TouchableOpacity>
@@ -274,26 +264,17 @@ export default function ProviderCalendarScreen() {
 /* ---------- Små UI-komponenter ---------- */
 function LegendDot({ color, label }) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color }} />
-      <Text style={{ color: "#374151" }}>{label}</Text>
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <Text style={styles.legendLabel}>{label}</Text>
     </View>
   );
 }
+
 function StatusPill({ status }) {
   const color = STATUS_COLORS[status] || "#6B7280";
   return (
-    <Text
-      style={{
-        paddingVertical: 2,
-        paddingHorizontal: 8,
-        backgroundColor: "#F3F4F6",
-        borderRadius: 8,
-        color,
-        fontWeight: "600",
-        textTransform: "capitalize",
-      }}
-    >
+    <Text style={[styles.statusPill, { color }]}>
       {status || "ukendt"}
     </Text>
   );
