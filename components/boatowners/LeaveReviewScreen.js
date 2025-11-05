@@ -12,11 +12,17 @@ import {
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { addProviderReview } from "../../services/providersService";
 import { markJobReviewed, getServiceRequest } from "../../services/requestsService";
+import styles, { colors } from "../../styles/boatowners/leaveReviewStyles";
 
 function Star({ filled, onPress, size = 28 }) {
   return (
-    <TouchableOpacity onPress={onPress} style={{ padding: 4 }}>
-      <Text style={{ fontSize: size, color: filled ? "#F59E0B" : "#D1D5DB" }}>
+    <TouchableOpacity onPress={onPress} style={styles.starTouch} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+      <Text
+        style={[
+          styles.starIcon,
+          { fontSize: size, color: filled ? colors.starFilled : colors.starEmpty },
+        ]}
+      >
         ★
       </Text>
     </TouchableOpacity>
@@ -42,7 +48,7 @@ export default function LeaveReviewScreen() {
     try {
       setSaving(true);
 
-      // sanity-check: job er paid eller completed
+      // sanity-check: job er paid eller completed og korrekt provider
       try {
         const job = await getServiceRequest(jobId);
         const s = String(job?.status || "").toLowerCase();
@@ -59,10 +65,7 @@ export default function LeaveReviewScreen() {
           return;
         }
         if (job.reviewGiven) {
-          Alert.alert(
-            "Allerede anmeldt",
-            "Du har allerede anmeldt denne opgave."
-          );
+          Alert.alert("Allerede anmeldt", "Du har allerede anmeldt denne opgave.");
           setSaving(false);
           return;
         }
@@ -82,37 +85,29 @@ export default function LeaveReviewScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "white" }}
+      style={styles.root}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
     >
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-        <Text style={{ fontSize: 22, fontWeight: "800" }}>Giv anmeldelse</Text>
-        <Text style={{ color: "#6B7280" }}>
-          Vurder din oplevelse med mekanikeren.
-        </Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Giv anmeldelse</Text>
+        <Text style={styles.subtitle}>Vurder din oplevelse med mekanikeren.</Text>
 
         {/* Stjerner */}
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View style={styles.starsRow}>
           {[1, 2, 3, 4, 5].map((s) => (
             <Star key={s} filled={rating >= s} onPress={() => setRating(s)} />
           ))}
-          <Text style={{ marginLeft: 8, fontWeight: "600" }}>{rating}/5</Text>
+          <Text style={styles.ratingText}>{rating}/5</Text>
         </View>
 
         {/* Kommentar */}
-        <Text style={{ fontWeight: "700" }}>Kommentar (valgfri)</Text>
+        <Text style={styles.label}>Kommentar (valgfri)</Text>
         <TextInput
-          style={{
-            borderWidth: 1,
-            borderColor: "#E5E7EB",
-            borderRadius: 12,
-            padding: 12,
-            minHeight: 100,
-            textAlignVertical: "top",
-          }}
+          style={styles.input}
           multiline
           placeholder="Skriv en kort kommentar…"
+          placeholderTextColor={colors.muted}
           value={comment}
           onChangeText={setComment}
         />
@@ -121,16 +116,12 @@ export default function LeaveReviewScreen() {
         <TouchableOpacity
           disabled={!valid || saving}
           onPress={submit}
-          style={{
-            backgroundColor: valid ? "#0A84FF" : "#93C5FD",
-            paddingVertical: 14,
-            borderRadius: 12,
-            alignItems: "center",
-          }}
+          style={[
+            styles.button,
+            { backgroundColor: valid ? colors.primary : colors.primaryDisabled },
+          ]}
         >
-          <Text style={{ color: "white", fontWeight: "800" }}>
-            {saving ? "Gemmer…" : "Gem anmeldelse"}
-          </Text>
+          <Text style={styles.buttonText}>{saving ? "Gemmer…" : "Gem anmeldelse"}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>

@@ -1,4 +1,3 @@
-// components/boatowners/ChatBotScreen.js
 import React, { useState, useRef } from "react";
 import {
   View,
@@ -12,7 +11,8 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { app } from "../../firebase"; // virker nu fordi app eksporteres
+import { app } from "../../firebase";
+import styles, { colors as chatColors } from "../../styles/boatowners/chatBotStyles";
 
 // Prod cloud function (brug dit projekt-id fra app.options)
 const CHAT_ENDPOINT = `https://us-central1-${app.options.projectId}.cloudfunctions.net/chat`;
@@ -35,6 +35,7 @@ export default function ChatBotScreen() {
   const send = async () => {
     const text = input.trim();
     if (!text || loading) return;
+
     const userMsg = { id: String(Date.now()), role: "user", content: text };
     setMessages((m) => [...m, userMsg]);
     setInput("");
@@ -57,15 +58,14 @@ export default function ChatBotScreen() {
         }),
       });
 
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const data = await resp.json();
       const reply =
         data?.reply?.content ??
         data?.reply?.message?.content ??
         "Beklager, der skete en fejl.";
+
       setMessages((m) => [
         ...m,
         { id: "ai-" + Date.now(), role: "assistant", content: reply },
@@ -82,7 +82,7 @@ export default function ChatBotScreen() {
       console.warn("Chat error:", e);
     } finally {
       setLoading(false);
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+      setTimeout(() => listRef.current?.scrollToEnd?.({ animated: true }), 50);
     }
   };
 
@@ -90,17 +90,12 @@ export default function ChatBotScreen() {
     const isUser = item.role === "user";
     return (
       <View
-        style={{
-          alignSelf: isUser ? "flex-end" : "flex-start",
-          backgroundColor: isUser ? "#0A84FF" : "#F3F4F6",
-          paddingVertical: 10,
-          paddingHorizontal: 14,
-          borderRadius: 16,
-          marginVertical: 6,
-          maxWidth: "82%",
-        }}
+        style={[
+            styles.bubbleBase,
+            isUser ? styles.bubbleUser : styles.bubbleAssistant,
+        ]}
       >
-        <Text style={{ color: isUser ? "#fff" : "#111827" }}>
+        <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>
           {item.content}
         </Text>
       </View>
@@ -111,9 +106,9 @@ export default function ChatBotScreen() {
   const listPaddingBottom = (insets.bottom || 0) + 90;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={styles.root}>
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
       >
@@ -122,47 +117,30 @@ export default function ChatBotScreen() {
           data={messages}
           keyExtractor={(it) => it.id}
           renderItem={renderItem}
-          contentContainerStyle={{ padding: 16, paddingBottom: listPaddingBottom }}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: listPaddingBottom },
+          ]}
           onContentSizeChange={() =>
-            listRef.current?.scrollToEnd({ animated: true })
+            listRef.current?.scrollToEnd?.({ animated: true })
           }
         />
 
         {/* Composer */}
-        <View
-          style={{
-            position: "absolute",
-            left: 12,
-            right: 12,
-            bottom: composerBottom,
-            backgroundColor: "#fff",
-            borderRadius: 24,
-            borderWidth: 1,
-            borderColor: "#E5E7EB",
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            shadowColor: "#000",
-            shadowOpacity: 0.08,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 3 },
-            elevation: 4,
-          }}
-        >
+        <View style={[styles.composer, { bottom: composerBottom }]}>
           <TextInput
             value={input}
             onChangeText={setInput}
             placeholder="Skriv en besked…"
-            placeholderTextColor="#667085"
-            style={{ flex: 1, padding: 10 }}
+            placeholderTextColor={chatColors.placeholder}
+            style={styles.input}
             multiline
           />
           {loading ? (
             <ActivityIndicator />
           ) : (
             <Pressable onPress={send} hitSlop={8}>
-              <Ionicons name="send" size={22} color="#0A84FF" />
+              <Ionicons name="send" size={22} color={chatColors.primary} />
             </Pressable>
           )}
         </View>
