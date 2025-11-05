@@ -1,4 +1,3 @@
-// /components/shared/ChatScreen.js
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -13,11 +12,8 @@ import {
 } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { auth } from "../../firebase";
-import {
-  listenMessages,
-  sendMessage,
-  startChat,
-} from "../../services/chatService";
+import { listenMessages, sendMessage, startChat } from "../../services/chatService";
+import styles from "../../styles/shared/chatScreenStyles";
 
 /* ===== Helpers ===== */
 function toDateMaybe(v) {
@@ -47,10 +43,7 @@ function toDateMaybe(v) {
 function timeLabel(ts) {
   const d = toDateMaybe(ts);
   if (!d) return "";
-  return new Intl.DateTimeFormat("da-DK", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
+  return new Intl.DateTimeFormat("da-DK", { hour: "2-digit", minute: "2-digit" }).format(d);
 }
 
 /* ===== Component ===== */
@@ -60,11 +53,7 @@ export default function ChatScreen() {
   const me = auth.currentUser;
   const myId = me?.uid || null;
 
-  // Forventede param-muligheder:
-  // - { chatId }
-  // - ELLER: { jobId, ownerId, providerId, otherName? }
-  const { chatId: chatIdFromRoute, jobId, ownerId, providerId, otherName } =
-    route.params || {};
+  const { chatId: chatIdFromRoute, jobId, ownerId, providerId, otherName } = route.params || {};
 
   const [chatId, setChatId] = useState(chatIdFromRoute || null);
   const [messages, setMessages] = useState([]);
@@ -72,14 +61,10 @@ export default function ChatScreen() {
   const [text, setText] = useState("");
   const flatRef = useRef(null);
 
-  // Sæt header-title hvis vi har navn
   useEffect(() => {
-    if (otherName) {
-      navigation.setOptions({ title: otherName });
-    }
+    if (otherName) navigation.setOptions({ title: otherName });
   }, [otherName, navigation]);
 
-  // Initier chat og start live-lytning
   useEffect(() => {
     let unsub = null;
     let cancelled = false;
@@ -91,9 +76,7 @@ export default function ChatScreen() {
 
         if (!id) {
           if (!jobId || !ownerId || !providerId) {
-            throw new Error(
-              "Mangler chatId eller (jobId, ownerId, providerId)."
-            );
+            throw new Error("Mangler chatId eller (jobId, ownerId, providerId).");
           }
           id = await startChat(jobId, ownerId, providerId);
         }
@@ -101,11 +84,9 @@ export default function ChatScreen() {
         if (cancelled) return;
         setChatId(id);
 
-        // Start live-lyt
         unsub = listenMessages(id, (rows) => {
           setMessages(rows);
           setPending(false);
-          // Autoscroll når nye beskeder kommer
           setTimeout(() => {
             try {
               flatRef.current?.scrollToEnd?.({ animated: true });
@@ -119,7 +100,6 @@ export default function ChatScreen() {
     }
 
     ensureChatAndListen();
-
     return () => {
       cancelled = true;
       if (typeof unsub === "function") unsub();
@@ -133,7 +113,6 @@ export default function ChatScreen() {
     try {
       setText("");
       await sendMessage(chatId, myId, trimmed);
-      // listenMessages opdaterer UI
     } catch (e) {
       console.log("Send fejl:", e);
     }
@@ -142,66 +121,34 @@ export default function ChatScreen() {
   const renderItem = ({ item }) => {
     const mine = item.senderId === myId;
     return (
-      <View
-        style={{
-          paddingVertical: 4,
-          paddingHorizontal: 10,
-          alignItems: mine ? "flex-end" : "flex-start",
-        }}
-      >
+      <View style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}>
         <View
-          style={{
-            maxWidth: "80%",
-            backgroundColor: mine ? "#0A84FF" : "#E5E7EB",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 14,
-            borderBottomRightRadius: mine ? 2 : 14,
-            borderBottomLeftRadius: mine ? 14 : 2,
-          }}
+          style={[
+            styles.bubble,
+            mine ? styles.bubbleMine : styles.bubbleTheirs,
+            mine ? styles.bubbleCornerMine : styles.bubbleCornerTheirs,
+          ]}
         >
-          <Text
-            style={{
-              color: mine ? "white" : "#111827",
-              fontSize: 16,
-            }}
-          >
-            {item.text}
-          </Text>
-          <Text
-            style={{
-              color: mine ? "rgba(255,255,255,0.8)" : "#6B7280",
-              fontSize: 10,
-              marginTop: 4,
-              alignSelf: "flex-end",
-            }}
-          >
-            {timeLabel(item.createdAt)}
-          </Text>
+          <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>
+          <Text style={[styles.time, mine && styles.timeMine]}>{timeLabel(item.createdAt)}</Text>
         </View>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "white" }}>
+    <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.flex1}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
       >
         {/* Messages */}
-        <View style={{ flex: 1 }}>
+        <View style={styles.flex1}>
           {pending ? (
-            <View
-              style={{
-                flex: 1,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
+            <View style={styles.center}>
               <ActivityIndicator />
-              <Text style={{ marginTop: 8 }}>Henter beskeder…</Text>
+              <Text style={styles.centerText}>Henter beskeder…</Text>
             </View>
           ) : (
             <FlatList
@@ -209,34 +156,16 @@ export default function ChatScreen() {
               data={messages}
               keyExtractor={(it) => it.id}
               renderItem={renderItem}
-              contentContainerStyle={{ paddingVertical: 10 }}
-              onContentSizeChange={() =>
-                flatRef.current?.scrollToEnd?.({ animated: true })
-              }
+              contentContainerStyle={styles.listContent}
+              onContentSizeChange={() => flatRef.current?.scrollToEnd?.({ animated: true })}
             />
           )}
         </View>
 
         {/* Composer */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            padding: 10,
-            borderTopWidth: 1,
-            borderTopColor: "#E5E7EB",
-            gap: 8,
-          }}
-        >
+        <View style={styles.composer}>
           <TextInput
-            style={{
-              flex: 1,
-              backgroundColor: "#F3F4F6",
-              borderRadius: 20,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              fontSize: 16,
-            }}
+            style={styles.input}
             placeholder="Skriv en besked…"
             value={text}
             onChangeText={setText}
@@ -245,14 +174,9 @@ export default function ChatScreen() {
           <TouchableOpacity
             onPress={onSend}
             disabled={!text.trim()}
-            style={{
-              backgroundColor: text.trim() ? "#0A84FF" : "#93C5FD",
-              paddingVertical: 10,
-              paddingHorizontal: 16,
-              borderRadius: 18,
-            }}
+            style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
           >
-            <Text style={{ color: "white", fontWeight: "600" }}>Send</Text>
+            <Text style={styles.sendBtnText}>Send</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
