@@ -1,3 +1,4 @@
+// /components/boatowners/ProfileHubScreen.js
 import React, { useMemo, useState } from "react";
 import {
   View,
@@ -7,8 +8,11 @@ import {
   Image,
   Platform,
   ActionSheetIOS,
+  Linking,
+  TouchableOpacity,
+  ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import * as ImagePicker from "expo-image-picker";
@@ -18,11 +22,17 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import DeleteAccountSection from "../shared/DeleteAccountSection";
 import { logout } from "../../services/authService";
 import { auth, storage } from "../../firebase";
-
 import styles, { colors } from "../../styles/boatowners/profileHubStyles";
+
+/* Link-konstanter */
+const SUPPORT_URL = "https://www.harborhub.me/";
+const PRIVACY_URL = "https://www.harborhub.me/privacy.html";
+const TERMS_URL = "https://www.harborhub.me/terms.html";
+const SUPPORT_EMAIL = "support@harborhub.me";
 
 export default function ProfileHubScreen({ navigation }) {
   const user = auth.currentUser;
+  const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const [uploading, setUploading] = useState(false);
 
@@ -55,9 +65,7 @@ export default function ProfileHubScreen({ navigation }) {
     const ext = guessed.includes("/") ? "jpg" : guessed;
     const contentType = `image/${ext === "jpg" ? "jpeg" : ext}`;
 
-    // gem som profiles/{uid}/avatar.<ext>
     const storageRef = ref(storage, `profiles/${uid}/avatar.${ext}`);
-
     const blob = await uriToBlob(localUri);
     await uploadBytes(storageRef, blob, { contentType });
     const url = await getDownloadURL(storageRef);
@@ -152,11 +160,15 @@ export default function ProfileHubScreen({ navigation }) {
     }
   };
 
-  const bottomSpacer = tabBarHeight + 16;
+  const bottomPad = tabBarHeight + insets.bottom + 16; // så nederste kort ikke ligger under tab-baren
+  const openURL = (url) => Linking.openURL(url);
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={[styles.body, { paddingBottom: bottomSpacer }]}>
+      <ScrollView
+        contentContainerStyle={[styles.body, { paddingBottom: bottomPad }]}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Hero */}
         <View style={styles.hero}>
           <Pressable
@@ -173,7 +185,6 @@ export default function ProfileHubScreen({ navigation }) {
               <Text style={styles.avatarInitials}>{initials}</Text>
             )}
 
-            {/* lille badge i hjørnet – kamera centreret */}
             <View style={styles.avatarEditBadge}>
               <View style={styles.avatarEditCircle}>
                 <Ionicons name="camera" size={13} color={colors.primary} />
@@ -205,23 +216,43 @@ export default function ProfileHubScreen({ navigation }) {
           <MenuItem icon="chatbubble-ellipses-outline" label="Chatbot" onPress={() => go("ChatBot")} />
         </View>
 
-        {/* Slet konto */}
-        <DeleteAccountSection style={styles.deleteSection} />
-      </View>
+        {/* Hjælp & juridisk */}
+        <View style={[styles.card, styles.cardSpacer]}>
+          <Text style={styles.helpTitle}>Hjælp & juridisk</Text>
+          <View style={styles.supportRow}>
+            <TouchableOpacity onPress={() => openURL(SUPPORT_URL)} style={styles.supportBtn}>
+              <Text style={styles.supportBtnText}>Support</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => openURL(PRIVACY_URL)} style={styles.supportBtn}>
+              <Text style={styles.supportBtnText}>Privatliv</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => openURL(TERMS_URL)} style={styles.supportBtn}>
+              <Text style={styles.supportBtnText}>Vilkår</Text>
+            </TouchableOpacity>
+          </View>
 
-      {/* Nedtonet 'Log ud' helt ned mod tab-baren */}
-      <View style={[styles.footerAbs, { bottom: tabBarHeight + 6 }]}>
-        <Pressable
-          onPress={handleLogout}
-          style={({ pressed }) => [
-            styles.logoutGhost,
-            pressed && styles.logoutGhostPressed,
-          ]}
-        >
-          <Ionicons name="log-out-outline" size={18} color={colors.danger} />
-          <Text style={styles.logoutGhostText}>Log ud</Text>
-        </Pressable>
-      </View>
+          <Pressable onPress={() => openURL(`mailto:${SUPPORT_EMAIL}`)} style={styles.supportEmailLink}>
+            <Text style={styles.supportEmailText}>Skriv til {SUPPORT_EMAIL}</Text>
+          </Pressable>
+        </View>
+
+        {/* Log ud – NÆST nederst */}
+        <View style={styles.logoutCard}>
+          <Pressable
+            onPress={handleLogout}
+            style={({ pressed }) => [
+              styles.logoutGhost,
+              pressed && styles.logoutGhostPressed,
+            ]}
+          >
+            <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+            <Text style={styles.logoutGhostText}>Log ud</Text>
+          </Pressable>
+        </View>
+
+        {/* Slet konto – NEDERST */}
+        <DeleteAccountSection style={styles.deleteSection} />
+      </ScrollView>
     </SafeAreaView>
   );
 }

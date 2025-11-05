@@ -1,30 +1,33 @@
-// /styles/mechanics/providerProfileStyles.js
 import { StyleSheet, Platform } from "react-native";
- 
+
 /** “Airbnb warm” → blå variant */
 export const COLORS = {
-  bg: "#F6FAFF",            // blød off-white med blå tone
+  bg: "#F6FAFF",
   card: "#FFFFFF",
-  ink: "#111827",           // primær tekst (næsten sort)
-  sub: "#4B5563",           // sekundær
-  muted: "#6B7280",         // meta
+  ink: "#111827",
+  sub: "#4B5563",
+  muted: "#6B7280",
   border: "#E5EAF5",
-  accent: "#0A84FF",        // blå accent (HarborHub/Criipto vibe)
+  accent: "#0A84FF",
   good: "#34A853",
+  danger: "#B91C1C",
+  dangerBg: "#FFE4E6",
+  dangerBorder: "#FCA5A5",
   badgeGoodBg: "#D1FAE5",
   badgeGoodText: "#065F46",
   badgeBadBg: "#FEE2E2",
   badgeBadText: "#991B1B",
+  star: "#F59E0B",
 };
- 
+
 const FONT_FAMILY = Platform.select({
   ios: "System",
   android: "Roboto",
   default: "System",
 });
- 
+
 const RADIUS = 16;
- 
+
 const ELEV = {
   shadowColor: "#000",
   shadowOpacity: 0.08,
@@ -32,12 +35,15 @@ const ELEV = {
   shadowOffset: { width: 0, height: 3 },
   elevation: 3,
 };
- 
+
 export default StyleSheet.create({
   /* ---------- Generelt ---------- */
   screen: {
     flex: 1,
     backgroundColor: COLORS.bg,
+  },
+  content: {
+    padding: 16,
   },
   loader: {
     flex: 1,
@@ -50,7 +56,7 @@ export default StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontSize: 15,
   },
- 
+
   /* ---------- Header ---------- */
   headerCard: {
     marginTop: 6,
@@ -68,7 +74,7 @@ export default StyleSheet.create({
     marginTop: 4,
     fontFamily: FONT_FAMILY,
   },
- 
+
   /* ---------- MitID ---------- */
   identityCard: {
     backgroundColor: COLORS.card,
@@ -104,6 +110,7 @@ export default StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
+  disabled: { opacity: 0.6 },
   identityBtnText: {
     color: "#fff",
     fontWeight: "700",
@@ -122,7 +129,7 @@ export default StyleSheet.create({
     color: "#DC2626",
     fontFamily: FONT_FAMILY,
   },
- 
+
   badgeGood: {
     flexDirection: "row",
     alignItems: "center",
@@ -153,7 +160,7 @@ export default StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontSize: 12,
   },
- 
+
   /* ---------- KPI ---------- */
   kpiGrid: {
     flexDirection: "row",
@@ -185,7 +192,7 @@ export default StyleSheet.create({
     marginTop: 2,
     fontFamily: FONT_FAMILY,
   },
- 
+
   /* ---------- Cards / generelt ---------- */
   card: {
     backgroundColor: COLORS.card,
@@ -196,6 +203,7 @@ export default StyleSheet.create({
     marginBottom: 12,
     ...ELEV,
   },
+  cardSpacer: { marginTop: 16 },
   rowBetween: {
     flexDirection: "row",
     alignItems: "center",
@@ -213,7 +221,21 @@ export default StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontSize: 13,
   },
- 
+
+  /* ---------- Stars ---------- */
+  starText14: {
+    color: COLORS.star,
+    fontWeight: "700",
+    fontSize: 14,
+    fontFamily: FONT_FAMILY,
+  },
+  starText16: {
+    color: COLORS.star,
+    fontWeight: "700",
+    fontSize: 16,
+    fontFamily: FONT_FAMILY,
+  },
+
   /* ---------- Quick actions ---------- */
   quickRow: {
     flexDirection: "row",
@@ -233,12 +255,19 @@ export default StyleSheet.create({
     gap: 8,
     ...ELEV,
   },
+  quickButtonDanger: {
+    backgroundColor: COLORS.dangerBg,
+    borderColor: COLORS.dangerBorder,
+  },
   quickText: {
     fontFamily: FONT_FAMILY,
     color: COLORS.ink,
     fontWeight: "700",
   },
- 
+  quickTextDanger: {
+    color: COLORS.danger,
+  },
+
   /* ---------- Expand list ---------- */
   sectionTitle: {
     fontSize: 18,
@@ -260,7 +289,7 @@ export default StyleSheet.create({
     justifyContent: "space-between",
     ...ELEV,
   },
- 
+
   /* ---------- Jobkort ---------- */
   jobCard: {
     backgroundColor: COLORS.card,
@@ -282,7 +311,7 @@ export default StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontSize: 15,
   },
- 
+
   /* ---------- Empty states ---------- */
   emptyBox: {
     backgroundColor: COLORS.card,
@@ -308,8 +337,9 @@ export default StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
- 
+
   /* ---------- Udbetalinger ---------- */
+  payoutList: { gap: 12 },
   payoutCard: {
     backgroundColor: COLORS.card,
     borderRadius: RADIUS,
@@ -326,7 +356,7 @@ export default StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: "#E6F0FF", // blød blå “chip”
+    backgroundColor: "#E6F0FF",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -343,4 +373,26 @@ export default StyleSheet.create({
     marginTop: 2,
     fontFamily: FONT_FAMILY,
   },
+
+  /* ---------- Hjælp & juridisk ---------- */
+  helpRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  helpBtn: {
+    flex: 1,
+    backgroundColor: "#E6F0FB",
+    borderColor: "#D6E6FF",
+    borderWidth: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  helpBtnText: { color: COLORS.accent, fontWeight: "700", fontFamily: FONT_FAMILY },
+  helpEmailLink: { marginTop: 10, alignItems: "center" },
+  helpEmailText: { color: COLORS.accent, fontWeight: "600", fontFamily: FONT_FAMILY },
+
+  /* ---------- Utilities ---------- */
+  listSeparator: { height: 10 },
+  flex1: { flex: 1 },
+
+  /* ---------- Delete/spacing ---------- */
+  deleteSectionSpacing: { marginTop: 16, marginBottom: 12 },
 });

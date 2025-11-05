@@ -1,4 +1,3 @@
-// /components/mechanics/ProviderProfileScreen.js
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -8,7 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  Image,
 } from "react-native";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -24,7 +22,7 @@ import {
   updateDoc,
   setDoc,
   serverTimestamp,
-  getDoc,               // ⬅️ hentes for at slå op i service_requests
+  getDoc,
 } from "firebase/firestore";
 import {
   getProviderProfile,
@@ -36,8 +34,13 @@ import styles, { COLORS } from "../../styles/mechanics/providerProfileStyles";
 import DeleteAccountSection from "../shared/DeleteAccountSection";
 import { logout } from "../../services/authService";
 
-// Sørg for at AuthSession færdiggøres når vi vender tilbage fra browser
 WebBrowser.maybeCompleteAuthSession();
+
+/* Links */
+const SUPPORT_URL = "https://www.harborhub.me/";
+const PRIVACY_URL = "https://www.harborhub.me/privacy.html";
+const TERMS_URL = "https://www.harborhub.me/terms.html";
+const SUPPORT_EMAIL = "support@harborhub.me";
 
 /* Helpers */
 const DKK = (n) =>
@@ -53,8 +56,9 @@ function Stars({ rating = 0, size = 14 }) {
   const r = Math.max(0, Math.min(5, Number(rating) || 0));
   const full = Math.floor(r);
   const half = r - full >= 0.5;
+  const starStyle = size >= 16 ? styles.starText16 : styles.starText14;
   return (
-    <Text style={{ color: "#F59E0B", fontWeight: "700", fontSize: size }}>
+    <Text style={starStyle}>
       {"★".repeat(full)}
       {half ? "½" : ""}
       {full === 0 && !half ? "—" : ""} {r ? `(${r.toFixed(1)})` : ""}
@@ -95,11 +99,10 @@ export default function ProviderProfileScreen({ navigation }) {
         ]);
         if (!cancelled) {
           setProv(profile || {});
-          // Normalisér Stripe-beløb (øre) til kroner
           const normalized = (payoutsData || [])
             .map((p) => {
               const amt = Number(p?.amount);
-              const amountDKK = Number.isFinite(amt) ? amt / 100 : 0; // øre → kr.
+              const amountDKK = Number.isFinite(amt) ? amt / 100 : 0;
               return { ...p, amountDKK };
             })
             .sort(
@@ -138,12 +141,10 @@ export default function ProviderProfileScreen({ navigation }) {
     return () => unsub();
   }, [uid]);
 
-  // 2b) Når assigned ændrer sig: hent manglende titler fra service_requests og cache dem
+  // 2b) Hent manglende titler fra service_requests
   useEffect(() => {
     let isCancelled = false;
-
     (async () => {
-      // Vi henter KUN for dem, der mangler en titel i assigned OG ikke er i cachen
       const missing = assigned
         .map((j) => ({ j, id: j.job_id || j.id }))
         .filter(({ j, id }) => {
@@ -152,7 +153,6 @@ export default function ProviderProfileScreen({ navigation }) {
           const hasCached = !!pickTitle(jobMeta[id] || {});
           return !hasLocal && !hasCached;
         });
-
       if (missing.length === 0) return;
 
       try {
@@ -174,11 +174,9 @@ export default function ProviderProfileScreen({ navigation }) {
           });
         }
       } catch (e) {
-        // Stille fejlhåndtering – titler er “nice to have”
         console.log("Kunne ikke hente jobtitler:", e?.message || e);
       }
     })();
-
     return () => {
       isCancelled = true;
     };
@@ -226,7 +224,6 @@ export default function ProviderProfileScreen({ navigation }) {
       };
     }, [assigned]);
 
-  // Total udbetalt (sum af payouts.amountDKK)
   const payoutsTotal = useMemo(() => {
     try {
       return (payouts || []).reduce((acc, p) => acc + (p?.amountDKK || 0), 0);
@@ -235,7 +232,6 @@ export default function ProviderProfileScreen({ navigation }) {
     }
   }, [payouts]);
 
-  // Fallback-beregning af rating ud fra reviews
   const { avgFromReviews, countFromReviews } = useMemo(() => {
     const valid = (reviews || []).filter(
       (r) => typeof r?.rating === "number" && !Number.isNaN(r.rating)
@@ -259,13 +255,12 @@ export default function ProviderProfileScreen({ navigation }) {
       ? prov.reviewCount
       : countFromReviews;
 
-  // Actions: opdatér jobstatus både i requests og i assigned_jobs
+  // Actions: opdatér jobstatus
   async function setStatus(job, status) {
     try {
       const jobId = job.job_id || job.id;
       if (!jobId) throw new Error("Mangler job-id");
 
-      // 1) service_requests/{jobId}
       await updateDoc(doc(db, "service_requests", jobId), {
         status,
         updated_at: serverTimestamp(),
@@ -273,7 +268,6 @@ export default function ProviderProfileScreen({ navigation }) {
         ...(status === "completed" ? { completedAt: serverTimestamp() } : {}),
       });
 
-      // 2) providers/{uid}/assigned_jobs/{jobId}
       await updateDoc(doc(db, "providers", uid, "assigned_jobs", jobId), {
         status,
         ...(status === "in_progress" ? { started_at: serverTimestamp() } : {}),
@@ -349,7 +343,7 @@ export default function ProviderProfileScreen({ navigation }) {
     }
   }
 
-  // Log ud (med confirm)
+  // Log ud
   const handleLogout = () => {
     Alert.alert(
       "Log ud",
@@ -405,7 +399,6 @@ export default function ProviderProfileScreen({ navigation }) {
       </View>
     );
 
-  // Hjælper til at få visningsnavn for et job (assigned + cache fra service_requests)
   const getDisplayTitle = (j) => {
     const id = j.job_id || j.id;
     return (
@@ -415,9 +408,13 @@ export default function ProviderProfileScreen({ navigation }) {
     );
   };
 
+  /* Hjælp/links handlers */
+  const openInBrowser = (url) => WebBrowser.openBrowserAsync(url);
+  const emailSupport = () => Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
+
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={{ padding: 16 }}>
-      {/* Header – Airbnb varm */}
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      {/* Header */}
       <View style={styles.headerCard}>
         <Text style={styles.welcome}>
           Hej, {String(displayName).split(" ")[0]} 👋
@@ -430,7 +427,7 @@ export default function ProviderProfileScreen({ navigation }) {
         <View style={styles.identityRow}>
           <Feather name="shield" size={20} color={COLORS.accent} />
           <Text style={styles.identityTitle}>Identitet</Text>
-          <View style={{ flex: 1 }} />
+          <View style={styles.flex1} />
           <MitIDBadge />
         </View>
 
@@ -439,10 +436,7 @@ export default function ProviderProfileScreen({ navigation }) {
         </Text>
 
         <TouchableOpacity
-          style={[
-            styles.identityBtn,
-            prov?.mitidVerified && { opacity: 0.6 },
-          ]}
+          style={[styles.identityBtn, prov?.mitidVerified && styles.disabled]}
           disabled={!!prov?.mitidVerified}
           onPress={handleMitIDVerify}
         >
@@ -462,7 +456,7 @@ export default function ProviderProfileScreen({ navigation }) {
         ) : null}
       </View>
 
-      {/* KPI’er – host-dashboard vibe */}
+      {/* KPI’er */}
       <View style={styles.kpiGrid}>
         <View style={styles.kpiCard}>
           <Feather name="briefcase" size={18} color={COLORS.accent} />
@@ -516,11 +510,11 @@ export default function ProviderProfileScreen({ navigation }) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.quickButton, { borderColor: "#FCA5A5", backgroundColor: "#FFE4E6" }]}
+          style={[styles.quickButton, styles.quickButtonDanger]}
           onPress={handleLogout}
         >
-          <Feather name="log-out" size={16} color={"#B91C1C"} />
-          <Text style={[styles.quickText, { color: "#B91C1C" }]}>Log ud</Text>
+          <Feather name="log-out" size={16} color={COLORS.danger} />
+          <Text style={[styles.quickText, styles.quickTextDanger]}>Log ud</Text>
         </TouchableOpacity>
       </View>
 
@@ -551,10 +545,10 @@ export default function ProviderProfileScreen({ navigation }) {
             data={completedJobs}
             keyExtractor={(it) => it.job_id || it.id}
             scrollEnabled={false}
-            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            ItemSeparatorComponent={() => <View style={styles.listSeparator} />}
             renderItem={({ item }) => {
               const id = item.job_id || item.id;
-              const title = getDisplayTitle(item); // ← nu med opslag i service_requests
+              const title = getDisplayTitle(item);
               return (
                 <TouchableOpacity
                   style={styles.jobCard}
@@ -577,7 +571,7 @@ export default function ProviderProfileScreen({ navigation }) {
           />
         ))}
 
-      {/* Udbetalinger – “Airbnb payouts” */}
+      {/* Udbetalinger */}
       <Text style={styles.sectionTitle}>Udbetalinger</Text>
       {payouts.length === 0 ? (
         <View style={styles.emptyBox}>
@@ -587,7 +581,7 @@ export default function ProviderProfileScreen({ navigation }) {
           </Text>
         </View>
       ) : (
-        <View style={{ gap: 12 }}>
+        <View style={styles.payoutList}>
           {payouts.map((p) => (
             <View key={p.id} style={styles.payoutCard}>
               <View style={styles.payoutRow}>
@@ -598,8 +592,7 @@ export default function ProviderProfileScreen({ navigation }) {
                     color={COLORS.accent}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
-                  {/* VIGTIGT: vis amountDKK (kroner), ikke amount (øre) */}
+                <View style={styles.flex1}>
                   <Text style={styles.payoutAmount}>{DKK(p.amountDKK)}</Text>
                   <Text style={styles.payoutDate}>
                     {p.createdAt?.toDate?.().toLocaleDateString?.("da-DK") || ""}
@@ -609,12 +602,33 @@ export default function ProviderProfileScreen({ navigation }) {
               </View>
             </View>
           ))}
-          {/* ⚠️ Faresone: Slet konto */}
-<DeleteAccountSection
-  style={{ marginTop: 16, marginBottom: 12 }}
-/>
         </View>
       )}
+
+      {/* Hjælp & juridisk */}
+      <View style={[styles.card, styles.cardSpacer]}>
+        <Text style={styles.cardTitle}>Hjælp & juridisk</Text>
+        <View style={styles.helpRow}>
+          <TouchableOpacity style={styles.helpBtn} onPress={() => openInBrowser(SUPPORT_URL)}>
+            <Text style={styles.helpBtnText}>Support</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.helpBtn} onPress={() => openInBrowser(PRIVACY_URL)}>
+            <Text style={styles.helpBtnText}>Privatliv</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.helpBtn} onPress={() => openInBrowser(TERMS_URL)}>
+            <Text style={styles.helpBtnText}>Vilkår</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity onPress={emailSupport} style={styles.helpEmailLink}>
+          <Text style={styles.helpEmailText}>
+            Skriv til {SUPPORT_EMAIL}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Faresone */}
+      <DeleteAccountSection style={styles.deleteSectionSpacing} />
     </ScrollView>
   );
 }
