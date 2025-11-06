@@ -1,3 +1,4 @@
+// /services/providersService.js
 import { db } from "../firebase";
 import {
   doc,
@@ -14,6 +15,7 @@ import {
   updateDoc,
   increment,
 } from "firebase/firestore";
+import { SERVICE_CATALOG } from "../data/servicesCatalog";
 
 /* =========================
    Profiler & roller
@@ -53,7 +55,7 @@ export async function getProviderProfile(userId) {
   return snap.exists() ? snap.data() : null;
 }
 
-/** Gem valgte services (kompetencer) for provider */
+/** Gem valgte services (kompetencer) for provider – gemmer LEAF-ids */
 export async function saveProviderServices(userId, servicesArray) {
   if (!userId) return;
   await setDoc(
@@ -63,10 +65,101 @@ export async function saveProviderServices(userId, servicesArray) {
   );
 }
 
-/** Hent alle services (katalog) */
+/* =========================
+   Service-katalog
+========================= */
+
+/**
+ * Hent alle services (katalog).
+ * Prioritet:
+ * 1) Firestore: meta/service_catalog (hierarkisk, forventer {id,name,children[]})
+ * 2) Firestore: collection("services") (flad: {id,name}) -> returneres som top-level leaves
+ * 3) Lokal fallback: SERVICE_CATALOG
+ */
 export async function getAvailableServices() {
-  const snap = await getDocs(collection(db, "services"));
-  return snap.empty ? [] : snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // 1) meta/service_catalog (foretrukken)
+  try {
+    const metaRef = doc(db, "meta", "service_catalog");
+    const metaSnap = await getDoc(metaRef);
+    if (metaSnap.exists()) {
+      const data = metaSnap.data() || {};
+      const cat = Array.isArray(data.catalog) ? data.catalog : null;
+      if (cat && cat.length > 0) return cat;
+    }
+  } catch (e) {
+    // fortsæt til næste fallback
+    console.warn("[services] meta/service_catalog læsning fejlede:", e?.message || e);
+  }
+
+  // 2) collection("services") – flad liste (id, name)
+  try {
+    const snap = await getDocs(collection(db, "services"));
+    if (!snap.empty) {
+      const flat = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
+      // Sørg for name-felt
+      const cleaned = flat
+        .map((x) => ({ id: x.id, name: x.name || x.title || String(x.id) }))
+        .sort((a, b) => a.name.localeCompare(b.name, "da"));
+      return cleaned; // top-level leaves uden children – UI håndterer dette
+    }
+  } catch (e) {
+    console.warn("[services] collection('services') læsning fejlede:", e?.message || e);
+  }
+
+  // 3) Lokal fallback
+  return SERVICE_CATALOG;
+}
+
+/* Hjælpere til migration/kompatibilitet mellem "gamle 7" og nye leaf-ids */
+export function legacyServiceIdMapping() {
+  // gamle labels -> anbefalede nye leaf-ids (kan udvides)
+  return {
+    motorservice: ["engine.service"],
+    bundmaling: ["hull.antifoul"],
+    vinteropbevaring: ["winter.layup", "winter.storage"],
+    polering: ["hull.polish", "cleaning.polish"],
+    riggerservice: ["rigging.service"],
+    elarbejde: ["electrical.troubleshoot", "electrical.install"],
+    reparation: ["misc.repair"],
+  };
+}
+
+/** Returnér et sæt af nye leaf-ids for en legacy string */
+export function mapLegacyServiceToLeaves(legacy) {
+  if (!legacy) return [];
+  const key = String(legacy).toLowerCase().trim();
+  const map = legacyServiceIdMapping();
+  return map[key] || [];
+}
+
+/**
+ * Bruges evt. i feed-filter:
+ * Tjek om en providers valgte leaf-ids "matcher" en opgave,
+ * der kan have enten service_type (gammelt) eller services[] (nyt).
+ */
+export function providerMatchesRequest(providerLeafIds, request) {
+  if (!Array.isArray(providerLeafIds) || providerLeafIds.length === 0) return true;
+
+  const reqLeaves = new Set();
+
+  // nyt felt: array af leaf-ids
+  if (Array.isArray(request?.services)) {
+    for (const s of request.services) {
+      if (typeof s === "string") reqLeaves.add(s);
+    }
+  }
+
+  // gammelt felt: enkelt string
+  if (reqLeaves.size === 0 && request?.service_type) {
+    for (const lid of mapLegacyServiceToLeaves(request.service_type)) {
+      reqLeaves.add(lid);
+    }
+  }
+
+  // hvis stadig intet at matche på -> lad den passere
+  if (reqLeaves.size === 0) return true;
+
+  return providerLeafIds.some((id) => reqLeaves.has(id));
 }
 
 /* =========================

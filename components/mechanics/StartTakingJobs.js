@@ -1,3 +1,4 @@
+// /components/mechanics/StartTakingJobs.js
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
@@ -26,18 +27,17 @@ export default function StartTakingJobs({ navigation, route }) {
 
   // Formular-state
   const [km, setKm] = useState(30);
-  const [homeAddress, setHomeAddress] = useState("");
-  const [workAreaAddress, setWorkAreaAddress] = useState("");
+  const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [picked, setPicked] = useState(null); // {lat,lng,label}
 
   const kmLabel = useMemo(() => `${Math.round(km)} km`, [km]);
 
-  const geocodeAddress = useCallback(async (address) => {
+  const geocodeAddress = useCallback(async (addr) => {
     try {
-      if (!address?.trim()) return null;
-      const results = await Location.geocodeAsync(address.trim());
+      if (!addr?.trim()) return null;
+      const results = await Location.geocodeAsync(addr.trim());
       if (!results?.length) return null;
       const { latitude, longitude } = results[0];
       return {
@@ -55,7 +55,7 @@ export default function StartTakingJobs({ navigation, route }) {
     const pl = route?.params?.pickedLocation;
     if (pl?.lat && pl?.lng) {
       setPicked({ lat: pl.lat, lng: pl.lng, label: pl.label || "" });
-      if (pl.label) setHomeAddress(pl.label);
+      if (pl.label) setAddress(pl.label);
       setShowIntro(false);
     }
   }, [route?.params?.pickedLocation]);
@@ -67,7 +67,7 @@ export default function StartTakingJobs({ navigation, route }) {
 
   const onNext = useCallback(async () => {
     if (!user) return Alert.alert("Ikke logget ind", "Log ind først.");
-    if (!homeAddress.trim() && !picked) {
+    if (!address.trim() && !picked) {
       Alert.alert("Adresse mangler", "Skriv din adresse eller vælg på kortet.");
       return;
     }
@@ -76,7 +76,7 @@ export default function StartTakingJobs({ navigation, route }) {
     setGeocoding(true);
 
     try {
-      // Hjemmebase
+      // Baseadresse: brug valgt punkt eller geokod teksten
       let homeGeo = null;
       if (picked?.lat && picked?.lng) {
         homeGeo = {
@@ -85,7 +85,7 @@ export default function StartTakingJobs({ navigation, route }) {
           geohash: geohashForLocation([picked.lat, picked.lng]),
         };
       } else {
-        homeGeo = await geocodeAddress(homeAddress);
+        homeGeo = await geocodeAddress(address);
         if (!homeGeo) {
           setGeocoding(false);
           setSaving(false);
@@ -94,21 +94,13 @@ export default function StartTakingJobs({ navigation, route }) {
           return;
         }
       }
-
-      // Valgfrit arbejdsområde
-      let workArea = null;
-      if (workAreaAddress.trim()) {
-        workArea = await geocodeAddress(workAreaAddress);
-      }
       setGeocoding(false);
 
       const payload = {
         userId: user.uid,
         willingToTravelKm: Math.round(km),
-        baseAddress: (picked?.label || homeAddress || "").trim(),
-        geo: homeGeo,
-        workAreaText: workAreaAddress.trim() || null,
-        workAreaGeo: workArea,
+        baseAddress: (picked?.label || address || "").trim(),
+        geo: homeGeo, // <- bruges af feedet til radius
         active: true,
         createdAt: new Date(),
       };
@@ -123,12 +115,11 @@ export default function StartTakingJobs({ navigation, route }) {
     } finally {
       setSaving(false);
     }
-  }, [user, km, homeAddress, workAreaAddress, picked, geocodeAddress, navigation, openMap]);
+  }, [user, km, address, picked, geocodeAddress, navigation, openMap]);
 
   const onSkip = useCallback(() => {
     setKm(30);
-    setHomeAddress("");
-    setWorkAreaAddress("");
+    setAddress("");
     setPicked(null);
     setShowIntro(true);
   }, []);
@@ -160,7 +151,7 @@ export default function StartTakingJobs({ navigation, route }) {
     );
   }
 
-  // Formular
+  // Formular (kun én adresse)
   return (
     <KeyboardAvoidingView
       style={styles.screen}
@@ -187,8 +178,8 @@ export default function StartTakingJobs({ navigation, route }) {
         <View style={styles.inputWrapper}>
           <TextInput
             placeholder="Fx Howitzvej 60, 2000 Frederiksberg"
-            value={homeAddress}
-            onChangeText={setHomeAddress}
+            value={address}
+            onChangeText={setAddress}
             autoCapitalize="none"
             style={styles.input}
             returnKeyType="done"
@@ -202,22 +193,10 @@ export default function StartTakingJobs({ navigation, route }) {
         </TouchableOpacity>
         {picked?.label ? <Text style={styles.pickedLabel}>Valgt: {picked.label}</Text> : null}
 
-        <Text style={styles.label}>Arbejdsområde (valgfri – by/havn/adresse)</Text>
-        <View style={styles.inputWrapper}>
-          <TextInput
-            placeholder="Fx Svanemøllehavnen, København"
-            value={workAreaAddress}
-            onChangeText={setWorkAreaAddress}
-            autoCapitalize="none"
-            style={styles.input}
-            returnKeyType="done"
-          />
-        </View>
-
         {geocoding && (
           <View style={styles.geoRow}>
             <ActivityIndicator />
-            <Text style={styles.geoText}>Finder positioner for adresserne…</Text>
+            <Text style={styles.geoText}>Finder position for adressen…</Text>
           </View>
         )}
 

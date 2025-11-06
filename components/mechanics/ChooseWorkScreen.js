@@ -1,66 +1,115 @@
+// /components/mechanics/ChooseWorkScreen.js
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { View, Text, TouchableOpacity, FlatList, ActivityIndicator, Alert } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  FlatList,
+  ActivityIndicator,
+  Alert,
+  TextInput,
+  LayoutAnimation,
+  Platform,
+  UIManager,
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getAuth } from "firebase/auth";
 
 import styles from "../../styles/mechanics/chooseWorkStyles";
 import { getAvailableServices, saveProviderServices } from "../../services/providersService";
+import { collectLeafIds, filterCatalog, flattenLeaves } from "../../utils/servicesCatalog";
 
-const FALLBACK_SERVICES = [
-  { id: "motorservice", name: "Motorservice" },
-  { id: "bundmaling", name: "Bundmaling" },
-  { id: "vinteropbevaring", name: "Vinteropbevaring" },
-  { id: "polering", name: "Polering & voks" },
-  { id: "riggerservice", name: "Riggerservice" },
-  { id: "elarbejde", name: "El-arbejde" },
-  { id: "reparation", name: "Reparationer" },
+// (Android needs this to animate accordion open/close)
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const STORAGE_KEY = "hh.servicesSelection";
+const RECOMMENDED = [
+  "engine.service",
+  "hull.antifoul",
+  "winter.layup",
+  "electrical.troubleshoot",
 ];
-
-const RECOMMENDED = ["motorservice", "bundmaling", "vinteropbevaring"];
 
 export default function ChooseWorkScreen({ navigation }) {
   const auth = getAuth();
   const user = auth.currentUser;
 
   const [loading, setLoading] = useState(true);
-  const [services, setServices] = useState(FALLBACK_SERVICES);
-  const [selected, setSelected] = useState({}); // id -> boolean
+  const [catalog, setCatalog] = useState([]);
+  const [expanded, setExpanded] = useState({}); // categoryId -> open
+  const [selected, setSelected] = useState({}); // leafId -> boolean
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
 
+  // Hent katalog + lokalt gemt valg
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const arr = await getAvailableServices();
-        const list = Array.isArray(arr) && arr.length > 0 ? arr : FALLBACK_SERVICES;
-        list.sort((a, b) => a.name.localeCompare(b.name, "da"));
-        if (!cancelled) setServices(list);
+        const data = await getAvailableServices();
+        if (!cancelled) setCatalog(Array.isArray(data) ? data : []);
+        // preload saved
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        if (raw && !cancelled) {
+          const obj = JSON.parse(raw);
+          if (obj && typeof obj === "object") setSelected(obj);
+        }
       } catch (err) {
-        console.warn("Kunne ikke hente services, bruger fallback:", err);
-        const list = [...FALLBACK_SERVICES].sort((a, b) => a.name.localeCompare(b.name, "da"));
-        if (!cancelled) setServices(list);
+        console.warn("Kunne ikke hente services:", err);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  // Fladt indeks (bruges til tællere m.m.)
+  const leaves = useMemo(() => flattenLeaves(catalog), [catalog]);
 
   const selectedCount = useMemo(
     () => Object.values(selected).filter(Boolean).length,
     [selected]
   );
 
-  const toggle = useCallback((id) => {
-    setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
+  const onToggleLeaf = useCallback((leafId) => {
+    setSelected((prev) => {
+      const next = { ...prev, [leafId]: !prev[leafId] };
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const onToggleCategory = useCallback((category) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded((e) => ({ ...e, [category.id]: !e[category.id] }));
+  }, []);
+
+  const onSelectCategoryAll = useCallback((category) => {
+    const ids = collectLeafIds(category);
+    setSelected((prev) => {
+      const next = { ...prev };
+      const allOn = ids.every((id) => next[id]);
+      ids.forEach((id) => (next[id] = !allOn));
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
   }, []);
 
   const setRecommended = useCallback(() => {
     const pre = {};
-    for (const id of RECOMMENDED) pre[id] = true;
+    RECOMMENDED.forEach((id) => (pre[id] = true));
     setSelected(pre);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(pre)).catch(() => {});
   }, []);
 
-  const clearAll = useCallback(() => setSelected({}), []);
+  const clearAll = useCallback(() => {
+    setSelected({});
+    AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+  }, []);
 
   const onDone = useCallback(async () => {
     if (!user) return Alert.alert("Ikke logget ind", "Log ind først.");
@@ -68,22 +117,12 @@ export default function ChooseWorkScreen({ navigation }) {
     if (chosen.length === 0) {
       return Alert.alert("Vælg mindst én ydelse", "Vælg fra listen eller brug ‘Anbefalet’.");
     }
-
     try {
       setSaving(true);
       await saveProviderServices(user.uid, chosen);
-      // VIGTIGT: hop ind i tab-navigatoren og vælg JobsFeed
       navigation.reset({
         index: 0,
-        routes: [
-          {
-            name: "ProviderRoot",
-            params: {
-              screen: "JobsFeed",
-              params: { justCompletedOnboarding: true }, // valgfrit flag
-            },
-          },
-        ],
+        routes: [{ name: "ProviderRoot", params: { screen: "JobsFeed" } }],
       });
     } catch (e) {
       Alert.alert("Fejl ved gem", e?.message ?? "Noget gik galt.");
@@ -92,9 +131,11 @@ export default function ChooseWorkScreen({ navigation }) {
     }
   }, [navigation, selected, user]);
 
-  const onCancel = useCallback(() => {
-    navigation.navigate("StartTakingJobs", { reset: true });
-  }, [navigation]);
+  // Søgning
+  const filteredCatalog = useMemo(
+    () => filterCatalog(catalog, query),
+    [catalog, query]
+  );
 
   if (loading) {
     return (
@@ -105,10 +146,92 @@ export default function ChooseWorkScreen({ navigation }) {
     );
   }
 
+  /* --------- RENDER --------- */
+
+  const renderLeaf = (leaf) => {
+    const on = !!selected[leaf.id];
+    return (
+      <TouchableOpacity
+        key={leaf.id}
+        onPress={() => onToggleLeaf(leaf.id)}
+        style={[styles.leafRow, on ? styles.leafRowOn : styles.leafRowOff]}
+      >
+        <Text style={styles.leafText}>{leaf.name}</Text>
+        <Text style={[styles.tick, on ? styles.tickOn : styles.tickOff]}>
+          {on ? "✓" : "＋"}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderCategory = ({ item: cat }) => {
+    const leafIds = collectLeafIds(cat);
+    const chosenInCat = leafIds.filter((id) => selected[id]).length;
+    const allOn = chosenInCat === leafIds.length && leafIds.length > 0;
+    const someOn = !allOn && chosenInCat > 0;
+
+    return (
+      <View style={styles.categoryCard}>
+        <TouchableOpacity
+          onPress={() => onToggleCategory(cat)}
+          style={styles.categoryHeader}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.categoryTitle}>{cat.name}</Text>
+          <View style={styles.categoryRight}>
+            <Text style={styles.categoryCount}>
+              {chosenInCat}/{leafIds.length}
+            </Text>
+            <Text style={styles.chevron}>{expanded[cat.id] ? "▾" : "▸"}</Text>
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.categoryActions}>
+          <TouchableOpacity
+            onPress={() => onSelectCategoryAll(cat)}
+            style={styles.smallBtn}
+          >
+            <Text style={styles.smallBtnText}>
+              {allOn ? "Fravælg alle" : someOn ? "Fuldfør alle" : "Vælg alle"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {expanded[cat.id] &&
+          (cat.children || []).map((node) =>
+            node.children?.length
+              ? (
+                <View key={node.id} style={styles.subCategoryBlock}>
+                  <View style={styles.subHeaderRow}>
+                    <Text style={styles.subHeader}>{node.name}</Text>
+                    <TouchableOpacity
+                      onPress={() => onSelectCategoryAll(node)}
+                      style={styles.subSmallBtn}
+                    >
+                      <Text style={styles.subSmallBtnText}>Vælg alle</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {node.children.map((leaf) => renderLeaf(leaf))}
+                </View>
+                )
+              : renderLeaf(node)
+          )}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.subtitle}>Arbejde</Text>
       <Text style={styles.title}>Hvilke opgaver kan du udføre?</Text>
+
+      <TextInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Søg fx 'motor', 'polering'…"
+        style={styles.search}
+        returnKeyType="search"
+      />
 
       <View style={styles.quickRow}>
         <TouchableOpacity onPress={setRecommended} style={styles.quickBtn}>
@@ -120,23 +243,10 @@ export default function ChooseWorkScreen({ navigation }) {
       </View>
 
       <FlatList
-        data={services}
+        data={filteredCatalog}
         keyExtractor={(item) => item.id}
+        renderItem={renderCategory}
         contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => {
-          const isOn = !!selected[item.id];
-          return (
-            <TouchableOpacity
-              onPress={() => toggle(item.id)}
-              style={[styles.serviceItem, isOn ? styles.serviceItemSelected : styles.serviceItemUnselected]}
-            >
-              <Text style={styles.serviceItemText}>{item.name}</Text>
-              <Text style={[styles.serviceTick, isOn ? styles.serviceTickOn : styles.serviceTickOff]}>
-                {isOn ? "✓" : "＋"}
-              </Text>
-            </TouchableOpacity>
-          );
-        }}
       />
 
       <Text style={styles.selectedInfo}>
@@ -156,8 +266,8 @@ export default function ChooseWorkScreen({ navigation }) {
         {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.doneButtonText}>Færdig</Text>}
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={onCancel} style={styles.cancelButton} disabled={saving}>
-        <Text style={styles.cancelButtonText}>Jeg ønsker ikke at tjene penge</Text>
+      <TouchableOpacity onPress={() => navigation.navigate("StartTakingJobs")} style={styles.cancelButton} disabled={saving}>
+        <Text style={styles.cancelButtonText}>Tilbage</Text>
       </TouchableOpacity>
     </View>
   );
