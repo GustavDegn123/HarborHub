@@ -1,60 +1,80 @@
 // /components/shared/LoginScreen.js
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, Image, Alert } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  Alert,
+} from "react-native";
 import * as Google from "expo-auth-session/providers/google";
 import * as Facebook from "expo-auth-session/providers/facebook";
 import * as WebBrowser from "expo-web-browser";
-import { makeRedirectUri } from "expo-auth-session";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../firebase";
-import { firebaseGoogleLogin, firebaseFacebookLogin } from "../../services/authService";
 import Constants from "expo-constants";
+
+import { auth } from "../../firebase";
+import {
+  firebaseGoogleLogin,
+  firebaseFacebookLogin,
+} from "../../services/authService";
 import styles from "../../styles/shared/loginStyles";
+import { Sentry } from "../../sentry";
 
 // Sørger for at auth-session redirect ikke hænger i browseren
 WebBrowser.maybeCompleteAuthSession();
 
-/** IMPORTANT:
- * I udvikling vil vi T-V-I-N-G-E Expo proxy'en.
- * Derfor hardcoder vi redirectUri til auth.expo.io i stedet for makeRedirectUri.
- * (makeRedirectUri kan i nogle setups returnere exp:// selv med useProxy=true).
+/** IMPORTANT (dev):
+ * Vi tvinger Expo-proxy ved at bruge fast redirect til auth.expo.io.
+ * (Undgår at makeRedirectUri returnerer exp:// i nogle setups)
  */
 const REDIRECT_URI = "https://auth.expo.io/@gustavdegn/harborhub";
+const FB_APP_ID = Constants.expoConfig?.extra?.EXPO_PUBLIC_FACEBOOK_APP_ID;
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Debug: vis hvilke værdier der bruges
-  useEffect(() => {
-    console.log("FB APP ID =", Constants.expoConfig?.extra?.FACEBOOK_APP_ID);
-    console.log("Auth redirectUri =", REDIRECT_URI);
-  }, []);
-
   /* ---------------- Google login ---------------- */
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    expoClientId: "16622525056-qcgjdv8gkbunfgv4c8g79qm0brnjvoj5.apps.googleusercontent.com",
-    iosClientId: "16622525056-7pgliodrdtnruh16cobp7kjb8h838g58.apps.googleusercontent.com",
-    androidClientId: "16622525056-3j94ogkp9q6gs2bn0p1q2q50iv9dt0q1.apps.googleusercontent.com",
-    webClientId: "16622525056-i5cbljlogf92qbdc505gcbrn8cne8r48.apps.googleusercontent.com",
-    redirectUri: REDIRECT_URI, // 👈 fast proxy-URL
-  });
+  const [googleRequest, googleResponse, googlePromptAsync] =
+    Google.useAuthRequest({
+      expoClientId:
+        "16622525056-qcgjdv8gkbunfgv4c8g79qm0brnjvoj5.apps.googleusercontent.com",
+      iosClientId:
+        "16622525056-7pgliodrdtnruh16cobp7kjb8h838g58.apps.googleusercontent.com",
+      androidClientId:
+        "16622525056-3j94ogkp9q6gs2bn0p1q2q50iv9dt0q1.apps.googleusercontent.com",
+      webClientId:
+        "16622525056-i5cbljlogf92qbdc505gcbrn8cne8r48.apps.googleusercontent.com",
+      redirectUri: REDIRECT_URI,
+    });
 
   /* ---------------- Facebook login ---------------- */
   const [fbRequest, fbResponse, fbPromptAsync] = Facebook.useAuthRequest({
-    clientId: Constants.expoConfig?.extra?.FACEBOOK_APP_ID,
+    // RN/iOS kræver platform-specifikke felter – vi bruger samme app-id overalt
+    clientId: FB_APP_ID,
+    iosClientId: FB_APP_ID,
+    androidClientId: FB_APP_ID,
+    webClientId: FB_APP_ID,
     scopes: ["public_profile", "email"],
-    redirectUri: REDIRECT_URI, // 👈 fast proxy-URL
+    redirectUri: REDIRECT_URI,
   });
 
   // Google-respons
   useEffect(() => {
-    if (response?.type === "success") {
+    if (googleResponse?.type === "success") {
       const idToken =
-        response?.params?.id_token || response?.authentication?.idToken || null;
+        googleResponse?.params?.id_token ||
+        googleResponse?.authentication?.idToken ||
+        null;
 
       if (!idToken) {
-        Alert.alert("Google login", "Kunne ikke hente id_token fra Google-responsen.");
+        Sentry.Native.captureMessage("Google login: id_token mangler", "warning");
+        Alert.alert(
+          "Google login",
+          "Kunne ikke hente id_token fra Google-responsen."
+        );
         return;
       }
 
@@ -64,18 +84,33 @@ export default function LoginScreen({ navigation }) {
           Alert.alert("Google login", `✅ Velkommen ${emailTxt}`);
         })
         .catch((err) => {
-          console.error("Google login fejl:", err);
-          Alert.alert("Google login fejl", err?.message || "Uventet fejl ved Google login.");
+          Sentry.Native.captureException(err);
+          Alert.alert(
+            "Google login fejl",
+            err?.message || "Uventet fejl ved Google login."
+          );
         });
+    } else if (googleResponse?.type === "error") {
+      Sentry.Native.captureMessage(
+        `Google login: auth-session error: ${JSON.stringify(googleResponse)}`,
+        "warning"
+      );
     }
-  }, [response]);
+  }, [googleResponse]);
 
   // Facebook-respons
   useEffect(() => {
     if (fbResponse?.type === "success") {
       const accessToken = fbResponse?.authentication?.accessToken || null;
       if (!accessToken) {
-        Alert.alert("Facebook login", "Kunne ikke hente accessToken fra Facebook-responsen.");
+        Sentry.Native.captureMessage(
+          "Facebook login: accessToken mangler",
+          "warning"
+        );
+        Alert.alert(
+          "Facebook login",
+          "Kunne ikke hente accessToken fra Facebook-responsen."
+        );
         return;
       }
 
@@ -85,13 +120,18 @@ export default function LoginScreen({ navigation }) {
           Alert.alert("Facebook login", `✅ Velkommen ${emailTxt}`);
         })
         .catch((err) => {
-          console.error("Facebook login fejl:", err);
+          Sentry.Native.captureException(err);
           const msg =
             err?.code === "auth/account-exists-with-different-credential"
               ? "Der findes allerede en konto med denne e-mail via en anden login-udbyder. Prøv at logge ind med Google eller e-mail."
               : err?.message || "Uventet fejl ved Facebook login.";
           Alert.alert("Facebook login fejl", msg);
         });
+    } else if (fbResponse?.type === "error") {
+      Sentry.Native.captureMessage(
+        `Facebook login: auth-session error: ${JSON.stringify(fbResponse)}`,
+        "warning"
+      );
     }
   }, [fbResponse]);
 
@@ -101,11 +141,12 @@ export default function LoginScreen({ navigation }) {
       await signInWithEmailAndPassword(auth, email.trim(), password);
       Alert.alert("Success", "✅ Du er logget ind!");
     } catch (error) {
-      console.error("Login Error:", error);
+      Sentry.Native.captureException(error);
       Alert.alert("Login fejl", error?.message || "Kunne ikke logge ind.");
     }
   };
 
+  /* ---------------- UI ---------------- */
   return (
     <View style={styles.container}>
       {/* Logo */}
@@ -119,11 +160,11 @@ export default function LoginScreen({ navigation }) {
         <Text style={styles.appleText}> Log ind med Apple</Text>
       </TouchableOpacity>
 
-      {/* Facebook Login (AKTIV) */}
+      {/* Facebook Login */}
       <TouchableOpacity
         style={[styles.socialButton, styles.facebookButton]}
         disabled={!fbRequest}
-        onPress={() => fbPromptAsync()}
+        onPress={() => fbPromptAsync({ useProxy: true })}
       >
         <View style={styles.socialContent}>
           <Image source={require("../../assets/facebook.png")} style={styles.icon} />
@@ -134,8 +175,8 @@ export default function LoginScreen({ navigation }) {
       {/* Google Login */}
       <TouchableOpacity
         style={[styles.socialButton, styles.googleButton]}
-        disabled={!request}
-        onPress={() => promptAsync()}
+        disabled={!googleRequest}
+        onPress={() => googlePromptAsync({ useProxy: true })}
       >
         <View style={styles.socialContent}>
           <Image source={require("../../assets/google.png")} style={styles.icon} />

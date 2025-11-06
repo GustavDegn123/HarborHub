@@ -1,40 +1,43 @@
-// firebase.js (JS, not TS)
+// /firebase.js
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   initializeAuth,
   getAuth,
   getReactNativePersistence,
 } from "firebase/auth";
-import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import Constants from "expo-constants";
 
-const extra = Constants.expoConfig?.extra || {};
+const extra = Constants.expoConfig?.extra ?? {};
 
 const firebaseConfig = {
-  apiKey: extra.FIREBASE_API_KEY,
-  authDomain: extra.FIREBASE_AUTH_DOMAIN,
-  projectId: extra.FIREBASE_PROJECT_ID,
-  storageBucket: extra.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: extra.FIREBASE_MESSAGING_SENDER_ID,
-  appId: extra.FIREBASE_APP_ID,
-  measurementId: extra.FIREBASE_MEASUREMENT_ID,
+  apiKey: extra.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: extra.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: extra.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: extra.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: extra.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: extra.EXPO_PUBLIC_FIREBASE_APP_ID,
+  measurementId: extra.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// Ensure a single app instance
+if (!firebaseConfig.apiKey) {
+  console.warn(
+    "[Firebase] Missing EXPO_PUBLIC_FIREBASE_API_KEY – check your .env and app.config.js"
+  );
+}
+
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Auth: initialize once, otherwise re-use existing
+// Ensure persistence on RN: try initializeAuth first, fall back to getAuth if already initialized
 let auth;
 try {
-  // If auth already exists for this app, this works and does NOT re-init
-  auth = getAuth(app);
-} catch (e) {
-  // First time in RN: initialize with persistence
   auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+    persistence: getReactNativePersistence(AsyncStorage),
   });
+} catch {
+  auth = getAuth(app);
 }
 
 const db = getFirestore(app);

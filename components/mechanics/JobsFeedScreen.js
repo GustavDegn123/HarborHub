@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Image,
 } from "react-native";
+import MapView, { Marker, Callout } from "react-native-maps";
 import { getAuth } from "firebase/auth";
 import { Timestamp } from "firebase/firestore";
 
@@ -16,7 +17,7 @@ import { getProvider } from "../../services/requestsService"; // henter provider
 import { listenOpenServiceRequests } from "../../services/serviceRequestsService"; // lytter åbne jobs
 import { getBoat } from "../../services/boatsService";
 
-/* ----------------- Helpers ----------------- */
+/* ---------- Helpers ---------- */
 function DKK(n) {
   return typeof n === "number"
     ? new Intl.NumberFormat("da-DK", {
@@ -26,7 +27,6 @@ function DKK(n) {
       }).format(n)
     : "—";
 }
-
 function haversineKm(a, b) {
   if (!a || !b) return null;
   const R = 6371;
@@ -39,13 +39,11 @@ function haversineKm(a, b) {
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
-
 function formatDistanceKm(km) {
   if (km == null) return "Ukendt afstand";
   if (km < 1) return "< 1 km";
   return `~${Math.round(km)} km`;
 }
-
 function toMillis(ts) {
   if (!ts) return 0;
   if (ts instanceof Timestamp) return ts.toMillis();
@@ -53,10 +51,10 @@ function toMillis(ts) {
   if (typeof ts === "number") return ts;
   return 0;
 }
-
-/** Robust geo-udtræk: accepterer {geo|location|workLocation} + {lat,lng|latitude,longitude} */
+/** Robust geo-udtræk: accepterer {base?.geo | geo | location | workLocation} med {lat,lng|latitude,longitude} */
 function pickGeo(obj) {
-  const g = obj?.geo || obj?.location || obj?.workLocation || null;
+  const g =
+    obj?.base?.geo || obj?.geo || obj?.location || obj?.workLocation || null;
   if (!g) return null;
   const lat =
     Number.isFinite(g.lat) ? g.lat : Number.isFinite(g.latitude) ? g.latitude : null;
@@ -65,7 +63,7 @@ function pickGeo(obj) {
   return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
 }
 
-/* ----------------- Screen ----------------- */
+/* ---------- Screen ---------- */
 export default function JobsFeedScreen({ navigation }) {
   const auth = getAuth();
   const user = auth.currentUser;
@@ -75,6 +73,7 @@ export default function JobsFeedScreen({ navigation }) {
   const [requests, setRequests] = useState([]);
   const [provider, setProvider] = useState(null);
   const [error, setError] = useState(null);
+  const [viewMode, setViewMode] = useState("list"); // "list" | "map"
 
   // Hent provider-profil (for geo/services/radius)
   useEffect(() => {
@@ -156,7 +155,7 @@ export default function JobsFeedScreen({ navigation }) {
       const reqGeo = pickGeo(r);
       const distanceKm =
         providerGeo && reqGeo ? haversineKm(providerGeo, reqGeo) : null;
-      return { ...r, distanceKm };
+      return { ...r, distanceKm, _geo: reqGeo };
     });
 
     const skillFiltered = withDist.filter((r) => {
@@ -190,6 +189,7 @@ export default function JobsFeedScreen({ navigation }) {
     setTimeout(() => setRefreshing(false), 400);
   }, []);
 
+  /* ---------- Cards (liste) ---------- */
   const renderItem = ({ item }) => {
     let deadlineText = null;
     if (item.deadline === "flexible") {
@@ -201,13 +201,15 @@ export default function JobsFeedScreen({ navigation }) {
           : item.deadline.toDate();
       deadlineText = d.toLocaleDateString("da-DK");
     }
+    const rating =
+      Number.isFinite(item?.rating) ? item.rating : item?.boat?.rating ?? null;
 
     return (
       <View style={styles.card}>
         {(item.imageUrl || item.image) && (
           <Image
             source={{ uri: item.imageUrl || item.image }}
-            style={{ width: "100%", height: 160, borderRadius: 12, marginBottom: 10 }}
+            style={styles.cardImage}
             resizeMode="cover"
           />
         )}
@@ -216,9 +218,16 @@ export default function JobsFeedScreen({ navigation }) {
           {item.service_type || "Serviceforespørgsel"}
         </Text>
 
-        {typeof item.budget === "number" && (
-          <Text style={styles.cardBudget}>{DKK(item.budget)}</Text>
-        )}
+        <View style={styles.cardRow}>
+          {typeof item.budget === "number" && (
+            <Text style={styles.cardPrice}>{DKK(item.budget)}</Text>
+          )}
+          {rating != null && (
+            <Text style={styles.cardRating}>
+              ★ {Number(rating).toFixed(1)}
+            </Text>
+          )}
+        </View>
 
         {item.description ? (
           <Text style={styles.cardDesc} numberOfLines={2}>
@@ -237,7 +246,9 @@ export default function JobsFeedScreen({ navigation }) {
         <Text style={styles.cardMeta}>{formatDistanceKm(item.distanceKm)} væk</Text>
 
         <TouchableOpacity
-          onPress={() => navigation.navigate("JobDetail", { jobId: item.id, viewAs: "provider" })}
+          onPress={() =>
+            navigation.navigate("JobDetail", { jobId: item.id, viewAs: "provider" })
+          }
           style={styles.btnPrimary}
         >
           <Text style={styles.btnPrimaryText}>Detaljer</Text>
@@ -246,6 +257,19 @@ export default function JobsFeedScreen({ navigation }) {
     );
   };
 
+  /* ---------- Kort ---------- */
+  const initialRegion = useMemo(() => {
+    const dk = { latitude: 56.2639, longitude: 9.5018, latitudeDelta: 5.5, longitudeDelta: 5.5 };
+    if (!providerGeo) return dk;
+    return {
+      latitude: providerGeo.lat,
+      longitude: providerGeo.lng,
+      latitudeDelta: 0.6,
+      longitudeDelta: 0.6,
+    };
+  }, [providerGeo]);
+
+  /* ---------- Empty/Loading/Error ---------- */
   const needsProfile =
     !provider ||
     !Array.isArray(provider.services) ||
@@ -274,6 +298,45 @@ export default function JobsFeedScreen({ navigation }) {
 
   return (
     <View style={styles.screen}>
+      {/* Header / segmented toggle */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Find job</Text>
+        <View style={styles.segment}>
+          <TouchableOpacity
+            onPress={() => setViewMode("list")}
+            style={[
+              styles.segmentBtn,
+              viewMode === "list" && styles.segmentBtnActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                viewMode === "list" && styles.segmentTextActive,
+              ]}
+            >
+              Liste
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setViewMode("map")}
+            style={[
+              styles.segmentBtn,
+              viewMode === "map" && styles.segmentBtnActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                viewMode === "map" && styles.segmentTextActive,
+              ]}
+            >
+              Kort
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {needsProfile && (
         <View style={styles.notice}>
           <Text style={styles.noticeText}>
@@ -297,7 +360,7 @@ export default function JobsFeedScreen({ navigation }) {
             Prøv at justere dine ydelser eller din radius.
           </Text>
         </View>
-      ) : (
+      ) : viewMode === "list" ? (
         <FlatList
           data={displayRequests}
           keyExtractor={(it) => it.id}
@@ -307,6 +370,68 @@ export default function JobsFeedScreen({ navigation }) {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         />
+      ) : (
+        <View style={styles.mapWrap}>
+          <MapView initialRegion={initialRegion} style={styles.map}>
+            {/* Brug providerens base som reference */}
+            {providerGeo && (
+              <Marker
+                coordinate={{ latitude: providerGeo.lat, longitude: providerGeo.lng }}
+                title="Din base"
+                description="Radius bruges til at filtrere opgaver"
+                pinColor="#005079"
+              />
+            )}
+
+            {displayRequests
+              .filter((r) => r._geo)
+              .map((r) => (
+                <Marker
+                  key={r.id}
+                  coordinate={{
+                    latitude: r._geo.lat,
+                    longitude: r._geo.lng,
+                  }}
+                  title={r.service_type || "Serviceforespørgsel"}
+                  description={`${DKK(r.budget)} • ${formatDistanceKm(r.distanceKm)}`}
+                >
+                  <Callout
+                    onPress={() =>
+                      navigation.navigate("JobDetail", { jobId: r.id, viewAs: "provider" })
+                    }
+                  >
+                    <View style={{ maxWidth: 240 }}>
+                      <Text style={{ fontWeight: "700", marginBottom: 2 }}>
+                        {r.service_type || "Serviceforespørgsel"}
+                      </Text>
+                      {typeof r.budget === "number" && (
+                        <Text style={{ marginBottom: 2 }}>{DKK(r.budget)}</Text>
+                      )}
+                      <Text style={{ color: "#6B7280", marginBottom: 6 }}>
+                        {formatDistanceKm(r.distanceKm)} •{" "}
+                        {r.boat?.name ? `Båd: ${r.boat.name}` : ""}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          navigation.navigate("JobDetail", { jobId: r.id, viewAs: "provider" })
+                        }
+                        style={{
+                          backgroundColor: "#184E6E",
+                          paddingVertical: 8,
+                          paddingHorizontal: 12,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text style={{ color: "white", fontWeight: "600" }}>
+                          Se detaljer
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </Callout>
+                </Marker>
+              ))}
+          </MapView>
+        </View>
       )}
     </View>
   );

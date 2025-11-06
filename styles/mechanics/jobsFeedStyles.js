@@ -1,150 +1,116 @@
 import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: "#f9fafb",
-  },
+  screen: { flex: 1, backgroundColor: "#F3F4F6" },
 
+  /* Header + segmented */
+  header: {
+    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    backgroundColor: "#F3F4F6",
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  segment: {
+    flexDirection: "row",
+    backgroundColor: "#E5E7EB",
+    borderRadius: 10,
+    padding: 3,
+    alignSelf: "flex-start",
+  },
+  segmentBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  segmentBtnActive: {
+    backgroundColor: "white",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  segmentText: { fontWeight: "600", color: "#374151" },
+  segmentTextActive: { color: "#111827" },
+
+  /* Notices */
+  notice: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "#E6F1F8",
+  },
+  noticeText: { color: "#0B5FA5" },
+
+  radiusNotice: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "#FFF7ED",
+  },
+  radiusNoticeText: { color: "#9A3412" },
+
+  /* List */
+  listContent: { padding: 16, paddingBottom: 32 },
+  card: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  cardImage: {
+    width: "100%",
+    height: 160,
+    borderRadius: 12,
+    marginBottom: 10,
+    backgroundColor: "#D1D5DB",
+  },
+  cardTitle: { fontSize: 18, fontWeight: "800", marginBottom: 2, color: "#0F172A" },
+  cardRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 4 },
+  cardPrice: { fontSize: 16, fontWeight: "700", color: "#0B3B57" },
+  cardRating: { fontSize: 14, fontWeight: "600", color: "#F59E0B" },
+  cardDesc: { color: "#4B5563", marginBottom: 8 },
+  cardMeta: { color: "#6B7280", marginBottom: 2 },
+
+  btnPrimary: {
+    marginTop: 10,
+    backgroundColor: "#184E6E",
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  btnPrimaryText: { color: "white", fontWeight: "700" },
+
+  /* Map */
+  mapWrap: { flex: 1, margin: 16, borderRadius: 16, overflow: "hidden" },
+  map: { flex: 1 },
+
+  /* Empty / loading */
   loader: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#F3F4F6",
   },
-  loaderText: {
-    marginTop: 8,
-    color: "#6b7280",
-  },
+  loaderText: { color: "#6B7280" },
 
   emptyWrap: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    paddingHorizontal: 24,
   },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    color: "#6b7280",
-    textAlign: "center",
-  },
-
-  listContent: {
-    paddingVertical: 8,
-  },
-
-  // Info-banner (profil mangler)
-  notice: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: "#EFF6FF",
-    borderColor: "#93C5FD",
-    borderWidth: 1,
-    borderRadius: 12,
-  },
-  noticeText: {
-    color: "#1E40AF",
-    textAlign: "center",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  // Radius-banner
-  radiusNotice: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: "#FEF3C7",
-    borderColor: "#F59E0B",
-    borderWidth: 1,
-    borderRadius: 12,
-  },
-  radiusNoticeText: {
-    color: "#92400E",
-    textAlign: "center",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  // Kort
-  card: {
-    padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    backgroundColor: "#fff",
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    marginBottom: 6,
-    color: "#0f1f2a",
-  },
-  cardBudget: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1f5c7d",
-    marginBottom: 6,
-  },
-  cardDesc: {
-    color: "#374151",
-    marginBottom: 6,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  cardMeta: {
-    color: "#6b7280",
-    fontSize: 13,
-    marginBottom: 4,
-  },
-
-  // Action-knapper i række
-  rowButtons: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 10,
-  },
-
-  // Blå knap: "Åbn chat"
-  btnPrimary: {
-    backgroundColor: "#1f5c7d",
-    paddingVertical: 12,
-    alignItems: "center",
-    borderRadius: 10,
-    flex: 1,
-  },
-  btnPrimaryText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 15,
-  },
-
-  // Sort knap: "Se detaljer"
-  btnDark: {
-    backgroundColor: "#0f1f2a",
-    paddingVertical: 12,
-    alignItems: "center",
-    borderRadius: 10,
-    flex: 1,
-  },
-  btnDarkText: {
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: 15,
-  },
+  emptyTitle: { fontSize: 18, fontWeight: "800", marginBottom: 6 },
+  emptySubtitle: { color: "#6B7280", textAlign: "center" },
 });

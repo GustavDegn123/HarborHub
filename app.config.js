@@ -73,36 +73,60 @@ module.exports = {
         androidAppLinks: [], // add if/when you configure Android App Links
       },
     ],
+    // Sentry for Expo/React Native — sourcemaps upload via EAS builds
+    [
+      "sentry-expo",
+      {
+        // These can be set as EAS Secrets; leaving undefined is fine locally.
+        organization: process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT || "harborhub",
+        // auth token picked up from env: SENTRY_AUTH_TOKEN (set as EAS secret)
+      },
+    ],
   ],
 
-  // ---- Public runtime config (read via Constants.expoConfig?.extra) ----
+  // ---- Public runtime config (read via process.env.EXPO_PUBLIC_* in app code) ----
   extra: {
     // Stripe (Publishable key only — safe to be public, but don’t hardcode in git)
-    STRIPE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+    EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY:
+      process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
 
     // Criipto (MitID)
-    CRIIPTO_DOMAIN: process.env.EXPO_PUBLIC_CRIIPTO_DOMAIN,
-    CRIIPTO_CLIENT_ID: process.env.EXPO_PUBLIC_CRIIPTO_CLIENT_ID,
+    EXPO_PUBLIC_CRIIPTO_DOMAIN: process.env.EXPO_PUBLIC_CRIIPTO_DOMAIN,
+    EXPO_PUBLIC_CRIIPTO_CLIENT_ID: process.env.EXPO_PUBLIC_CRIIPTO_CLIENT_ID,
 
     // Firebase (web client config — not secret, still don’t hardcode in git)
-    FIREBASE_API_KEY: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-    FIREBASE_AUTH_DOMAIN: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    FIREBASE_PROJECT_ID: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-    FIREBASE_STORAGE_BUCKET: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    FIREBASE_MESSAGING_SENDER_ID:
+    EXPO_PUBLIC_FIREBASE_API_KEY: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+    EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN:
+      process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    EXPO_PUBLIC_FIREBASE_PROJECT_ID:
+      process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+    EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET:
+      process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:
       process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    FIREBASE_APP_ID: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
-    FIREBASE_MEASUREMENT_ID: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
+    EXPO_PUBLIC_FIREBASE_APP_ID: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+    EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID:
+      process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 
     // Google OAuth client IDs (optional)
-    GOOGLE_EXPO_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
-    GOOGLE_IOS_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    GOOGLE_ANDROID_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    GOOGLE_WEB_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID:
+      process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
+    EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID:
+      process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID:
+      process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID:
+      process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
 
     // Facebook (public app id for expo-auth-session)
-    FACEBOOK_APP_ID:
+    EXPO_PUBLIC_FACEBOOK_APP_ID:
       process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || "1214898343801009",
+
+    // Sentry (public DSN and optional env)
+    EXPO_PUBLIC_SENTRY_DSN: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    EXPO_PUBLIC_SENTRY_ENV:
+      process.env.EXPO_PUBLIC_SENTRY_ENV || (process.env.NODE_ENV === "production" ? "production" : "development"),
 
     // EAS Project
     eas: {

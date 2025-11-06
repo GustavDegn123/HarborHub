@@ -1,4 +1,11 @@
 // App.js
+
+// Skal være absolut øverst for React Navigation
+import "react-native-gesture-handler";
+
+// Sentry init
+import "./sentry";
+
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import * as Linking from "expo-linking";
@@ -12,7 +19,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import { getUserRole } from "./services/authService";
 
-/* Stripe (TEST) */
+/* Stripe */
 import { StripeProvider } from "@stripe/stripe-react-native";
 
 /* Criipto */
@@ -33,14 +40,10 @@ import ChatBotScreen from "./components/boatowners/ChatBotScreen";
 /* Payments */
 import OwnerCheckoutScreen from "./components/payments/OwnerCheckoutScreen";
 
-/* Provider (mechanic) screens */
-import AssignedJobsScreen from "./components/mechanics/AssignedJobsScreen";
-import StartTakingJobs from "./components/mechanics/StartTakingJobs";
-import ChooseWorkScreen from "./components/mechanics/ChooseWorkScreen";
-import JobsFeedScreen from "./components/mechanics/JobsFeedScreen";
+/* Provider (mechanic) */
 import JobDetailScreen from "./components/mechanics/JobDetailScreen";
-import ProviderProfileScreen from "./components/mechanics/ProviderProfileScreen";
 import ProviderCalendarScreen from "./components/mechanics/ProviderCalendarScreen";
+import ChooseWorkScreen from "./components/mechanics/ChooseWorkScreen";
 import ProviderTabs from "./components/mechanics/ProviderTabs";
 
 /* Shared */
@@ -61,9 +64,18 @@ import { navigationRef } from "./navigation/navRef";
 
 /* ---- env/extra ---- */
 const extra = Constants.expoConfig?.extra ?? {};
-const STRIPE_PUBLISHABLE_KEY = extra.STRIPE_PUBLISHABLE_KEY;
-const CRIIPTO_DOMAIN = extra.CRIIPTO_DOMAIN;
-const CRIIPTO_CLIENT_ID = extra.CRIIPTO_CLIENT_ID;
+const STRIPE_PUBLISHABLE_KEY =
+  extra.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
+  process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
+  "";
+const CRIIPTO_DOMAIN =
+  extra.EXPO_PUBLIC_CRIIPTO_DOMAIN ||
+  process.env.EXPO_PUBLIC_CRIIPTO_DOMAIN ||
+  "";
+const CRIIPTO_CLIENT_ID =
+  extra.EXPO_PUBLIC_CRIIPTO_CLIENT_ID ||
+  process.env.EXPO_PUBLIC_CRIIPTO_CLIENT_ID ||
+  "";
 
 const Stack = createNativeStackNavigator();
 
@@ -73,8 +85,7 @@ const linking = {
 
 export default function App() {
   const [initializing, setInitializing] = useState(true);
-  // shape: null | { ...firebaseUser, role?: 'owner'|'provider'|null, needsVerification?: boolean }
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null); // null | { ...firebaseUser, role?: 'owner'|'provider'|null, needsVerification?: boolean }
 
   // Auth state + email verification + rolle
   useEffect(() => {
@@ -84,21 +95,22 @@ export default function App() {
           setUser(null);
           return;
         }
-
-        // Sørg for friske claims
         await firebaseUser.reload();
 
-        const providerId = firebaseUser.providerData?.[0]?.providerId || "password";
+        const providerId =
+          firebaseUser.providerData?.[0]?.providerId || "password";
         const needsVerification =
           providerId === "password" && firebaseUser.emailVerified !== true;
 
         if (needsVerification) {
-          // Vis VerifyEmail-screen; hent ikke rolle endnu (regler kan blokere).
           setUser({ ...firebaseUser, role: null, needsVerification: true });
         } else {
-          // Verified (eller social login) -> hent rolle
           const role = await getUserRole(firebaseUser.uid);
-          setUser({ ...firebaseUser, role: role || null, needsVerification: false });
+          setUser({
+            ...firebaseUser,
+            role: role || null,
+            needsVerification: false,
+          });
         }
       } catch (err) {
         console.error("Auth bootstrap fejl:", err);
@@ -117,7 +129,8 @@ export default function App() {
 
     const removeTap = attachNotificationTapListener();
     const subReceived = Notifications.addNotificationReceivedListener(() => {});
-    const subResponse = Notifications.addNotificationResponseReceivedListener(() => {});
+    const subResponse =
+      Notifications.addNotificationResponseReceivedListener(() => {});
     return () => {
       removeTap?.();
       subReceived.remove();
@@ -148,7 +161,6 @@ export default function App() {
           >
             {user ? (
               user.needsVerification ? (
-                // Password-bruger uden verified e-mail
                 <Stack.Screen
                   name="VerifyEmail"
                   component={VerifyEmailScreen}
@@ -156,13 +168,11 @@ export default function App() {
                 />
               ) : user.role === "owner" ? (
                 <>
-                  {/* OWNER ROOT (tabs) */}
                   <Stack.Screen
                     name="OwnerRoot"
                     component={OwnerTabs}
                     options={{ headerShown: false }}
                   />
-                  {/* Owner stack-sider */}
                   <Stack.Screen
                     name="BoatForm"
                     component={BoatFormScreen}
@@ -231,13 +241,11 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  {/* PROVIDER ROOT (tabs) */}
                   <Stack.Screen
                     name="ProviderRoot"
                     component={ProviderTabs}
                     options={{ headerShown: false }}
                   />
-                  {/* Provider stack-sider */}
                   <Stack.Screen
                     name="JobDetail"
                     component={JobDetailScreen}
