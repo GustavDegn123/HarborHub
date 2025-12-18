@@ -11,8 +11,8 @@ import {
   Image,
 } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
-import { Timestamp } from "firebase/firestore";
-import { auth } from "../../firebase";
+import { Timestamp, doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../../firebase";
 import {
   getServiceRequest,
   addBid,
@@ -24,10 +24,7 @@ import {
 } from "../../services/requestsService";
 import { getBoat } from "../../services/boatsService";
 import styles from "../../styles/mechanics/jobDetailStyles";
-import {
-  computeViewerRole,
-  derivePermissions,
-} from "../../utils/jobPermissions";
+import { computeViewerRole, derivePermissions } from "../../utils/jobPermissions";
 
 function DKK(n) {
   return Number.isFinite(Number(n))
@@ -37,6 +34,20 @@ function DKK(n) {
         maximumFractionDigits: 0,
       }).format(Number(n))
     : "—";
+}
+
+/** Flatten service catalog -> [{id,name}] */
+function flattenLeaves(nodes, acc = []) {
+  if (!Array.isArray(nodes)) return acc;
+  for (const n of nodes) {
+    if (!n) continue;
+    if (Array.isArray(n.children) && n.children.length) {
+      flattenLeaves(n.children, acc);
+    } else if (n?.id && n?.name) {
+      acc.push({ id: String(n.id), name: String(n.name) });
+    }
+  }
+  return acc;
 }
 
 export default function JobDetailScreen() {
@@ -55,6 +66,41 @@ export default function JobDetailScreen() {
   const [message, setMessage] = useState("");
   const [acceptedProviderName, setAcceptedProviderName] = useState("");
 
+  // service id -> name map
+  const [serviceNameById, setServiceNameById] = useState({});
+
+  // Hent service-katalog (til visning af navn i stedet for ID)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "meta", "service_catalog"));
+        const catalog = snap.exists() ? snap.data()?.catalog : null;
+
+        const leaves = flattenLeaves(Array.isArray(catalog) ? catalog : []);
+        const map = {};
+        for (const l of leaves) map[l.id] = l.name;
+
+        if (alive) setServiceNameById(map);
+      } catch {
+        if (alive) setServiceNameById({});
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const displayServiceTitle = useMemo(() => {
+    return (
+      job?.service_name ||
+      serviceNameById[job?.service_type] ||
+      job?.service_type ||
+      "Serviceforespørgsel"
+    );
+  }, [job, serviceNameById]);
+
   async function reload() {
     try {
       const data = await getServiceRequest(jobId);
@@ -62,6 +108,8 @@ export default function JobDetailScreen() {
 
       if (data?.boat_id && data?.owner_id) {
         getBoat(data.owner_id, data.boat_id).then(setBoat).catch(() => {});
+      } else {
+        setBoat(null);
       }
 
       getBids(jobId).then(setBids).catch(() => setBids([]));
@@ -187,6 +235,7 @@ export default function JobDetailScreen() {
         "Chat ikke tilgængelig",
         "Chatten er først tilgængelig, når opgaven er tildelt."
       );
+
     const otherName = role === "owner" ? "Mekaniker" : "Bådejer";
     navigation.navigate("Chat", {
       jobId: job.id,
@@ -221,10 +270,9 @@ export default function JobDetailScreen() {
       <View style={styles.card}>
         {/* Header */}
         <View style={styles.cardHeader}>
-          <Text style={styles.title}>
-            {job.service_type || "Serviceforespørgsel"}
-          </Text>
+          <Text style={styles.title}>{displayServiceTitle}</Text>
         </View>
+
         {!!created && <Text style={styles.created}>Oprettet: {created}</Text>}
 
         {/* Billede */}
@@ -252,12 +300,15 @@ export default function JobDetailScreen() {
         {/* Detaljer */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Detaljer</Text>
+
           {!!boat?.name && (
             <Text style={styles.sectionText}>Båd: {boat.name}</Text>
           )}
+
           {Number.isFinite(Number(job.budget)) && (
             <Text style={styles.sectionText}>Budget: {DKK(job.budget)}</Text>
           )}
+
           {!!job.deadline && (
             <Text style={styles.sectionText}>
               Deadline:{" "}
@@ -268,9 +319,11 @@ export default function JobDetailScreen() {
                 : job.deadline?.toDate?.()?.toLocaleDateString?.("da-DK")}
             </Text>
           )}
+
           {!!job.address && (
             <Text style={styles.sectionText}>Adresse: {job.address}</Text>
           )}
+
           {!!job.distanceText && (
             <Text style={styles.sectionText}>Afstand: {job.distanceText}</Text>
           )}
@@ -297,6 +350,7 @@ export default function JobDetailScreen() {
                     : acceptedBid?.price
                 )}
               </Text>
+
               {!!acceptedProviderName && (
                 <Text style={{ color: "#6B7280", marginTop: 2 }}>
                   {acceptedProviderName}
@@ -308,6 +362,17 @@ export default function JobDetailScreen() {
       </View>
 
       <View style={styles.spacer} />
+
+      {/* Chat (kun når relevant) */}
+      {showChatButton && (
+        <TouchableOpacity
+          style={styles.btnPrimary}
+          onPress={openChat}
+          disabled={saving}
+        >
+          <Text style={styles.btnPrimaryText}>Åbn chat</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Mekaniker-knapper (start/afslut/annullér) */}
       {(P.canStart || P.canComplete || P.canCancelAsProvider) && (
@@ -392,6 +457,7 @@ export default function JobDetailScreen() {
             <Text style={styles.sectionTitle}>
               {role === "owner" ? "Modtagne bud" : "Mine bud"}
             </Text>
+
             {bids
               .filter((b) => (role === "owner" ? true : b.provider_id === user?.uid))
               .map((b) => (

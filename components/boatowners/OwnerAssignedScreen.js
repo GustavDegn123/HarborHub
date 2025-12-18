@@ -12,10 +12,11 @@ import {
   ScrollView,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { auth } from "../../firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../../firebase";
 import { listenOwnerRequestsSafe } from "../../services/requestsService";
 import styles from "../../styles/boatowners/ownerAssignedStyles";
- 
+
 /* ---------- Helpers ---------- */
 function DKK(n) {
   return Number.isFinite(Number(n))
@@ -26,12 +27,26 @@ function DKK(n) {
       }).format(Number(n))
     : "—";
 }
- 
+
 const ts = (v) =>
   (v && typeof v.toMillis === "function"
     ? v.toMillis()
     : new Date(v || 0).getTime()) || 0;
- 
+
+/** Flatten service catalog -> [{id,name}] */
+function flattenLeaves(nodes, acc = []) {
+  if (!Array.isArray(nodes)) return acc;
+  for (const n of nodes) {
+    if (!n) continue;
+    if (Array.isArray(n.children) && n.children.length) {
+      flattenLeaves(n.children, acc);
+    } else if (n?.id && n?.name) {
+      acc.push({ id: String(n.id), name: String(n.name) });
+    }
+  }
+  return acc;
+}
+
 /* ---------- Status-normalisering & danske labels ---------- */
 function normalizeStatus(raw) {
   const s = String(raw || "").trim().toLowerCase();
@@ -51,7 +66,7 @@ function normalizeStatus(raw) {
   if (s === "anmeldt") return "reviewed";
   return "open";
 }
- 
+
 function statusDisplay(raw) {
   const slug = normalizeStatus(raw);
   switch (slug) {
@@ -71,16 +86,51 @@ function statusDisplay(raw) {
       return { label: "Ukendt", color: "#6B7280", slug: "unknown" };
   }
 }
- 
+
 export default function OwnerAssignedScreen() {
   const navigation = useNavigation();
   const uid = auth.currentUser?.uid;
- 
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState([]);
   const [err, setErr] = useState("");
- 
+
+  // service id -> name map
+  const [serviceNameById, setServiceNameById] = useState({});
+
+  // Hent service-katalog (til visning af navn i stedet for ID)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "meta", "service_catalog"));
+        const catalog = snap.exists() ? snap.data()?.catalog : null;
+
+        const leaves = flattenLeaves(Array.isArray(catalog) ? catalog : []);
+        const map = {};
+        for (const l of leaves) map[l.id] = l.name;
+
+        if (alive) setServiceNameById(map);
+      } catch {
+        if (alive) setServiceNameById({});
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const serviceTitle = useCallback(
+    (job) =>
+      job?.service_name ||
+      serviceNameById[job?.service_type] ||
+      job?.service_type ||
+      "Serviceopgave",
+    [serviceNameById]
+  );
+
   useEffect(() => {
     if (!uid) return;
     setLoading(true);
@@ -97,12 +147,12 @@ export default function OwnerAssignedScreen() {
     );
     return () => unsub && unsub();
   }, [uid]);
- 
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 500);
   }, []);
- 
+
   // Kun aktive: alt der ikke er open/completed/paid/reviewed
   const { active } = useMemo(() => {
     const act = [];
@@ -117,12 +167,12 @@ export default function OwnerAssignedScreen() {
     act.sort((a, b) => score(b) - score(a));
     return { active: act };
   }, [items]);
- 
+
   const StatusPill = ({ status }) => {
     const { label, color } = statusDisplay(status);
     return <Text style={[styles.statusPill, { color }]}>{label}</Text>;
   };
- 
+
   function openChat(job) {
     try {
       const ownerId = job?.owner_id;
@@ -143,9 +193,10 @@ export default function OwnerAssignedScreen() {
       setErr(e?.message || String(e));
     }
   }
- 
-  const openDetail = (job) => navigation.navigate("JobDetail", { jobId: job.id, viewAs: "owner" });
- 
+
+  const openDetail = (job) =>
+    navigation.navigate("JobDetail", { jobId: job.id, viewAs: "owner" });
+
   const goToPayment = (job) => {
     try {
       const providerId = job?.acceptedProviderId;
@@ -166,13 +217,13 @@ export default function OwnerAssignedScreen() {
       Alert.alert("Fejl", e?.message || "Kunne ikke åbne betaling.");
     }
   };
- 
+
   const openReview = (job) => {
     const slug = normalizeStatus(job.status);
     const isPaid = slug === "paid" || !!job?.payment?.succeededAt;
     const canReview =
       slug === "completed" && isPaid && !!job.acceptedProviderId && !job.reviewGiven;
- 
+
     if (!canReview) {
       return Alert.alert("Ikke klar", "Denne opgave kan ikke anmeldes endnu.");
     }
@@ -182,11 +233,11 @@ export default function OwnerAssignedScreen() {
       ownerId: job.owner_id,
     });
   };
- 
+
   const NextStep = ({ job }) => {
     const slug = normalizeStatus(job.status);
     const isPaid = slug === "paid" || !!job?.payment?.succeededAt;
- 
+
     if (slug === "completed" && !isPaid) {
       return (
         <View style={[styles.nextBox, styles.nextInfo]}>
@@ -201,7 +252,7 @@ export default function OwnerAssignedScreen() {
         </View>
       );
     }
- 
+
     if (isPaid && !job.reviewGiven) {
       return (
         <View style={[styles.nextBox, styles.nextSuccess]}>
@@ -214,7 +265,7 @@ export default function OwnerAssignedScreen() {
         </View>
       );
     }
- 
+
     return (
       <View style={[styles.nextBox, styles.nextNeutral]}>
         <Text style={styles.nextNeutralText}>
@@ -229,64 +280,63 @@ export default function OwnerAssignedScreen() {
       </View>
     );
   };
- 
+
   const JobCard = ({ job, showReviewButton = false }) => {
-    const img =
-      job.image || job.imageUrl || job.imageURL || job.photoURL || null;
+    const img = job.image || job.imageUrl || job.imageURL || job.photoURL || null;
     const slug = normalizeStatus(job.status);
     const isPaid = slug === "paid" || !!job?.payment?.succeededAt;
- 
+
     const canPay =
       slug === "completed" &&
       !isPaid &&
       !!job?.acceptedProviderId &&
       Number.isFinite(Number(job?.acceptedPrice)) &&
       Number(job?.acceptedPrice) > 0;
- 
+
     const canReview =
       showReviewButton &&
       slug === "completed" &&
       isPaid &&
       !!job.acceptedProviderId &&
       !job.reviewGiven;
- 
+
     return (
       <View style={styles.card}>
         <View style={styles.cardHeaderRow}>
-          <Text style={styles.cardTitle}>{job.service_type || "Serviceopgave"}</Text>
+          <Text style={styles.cardTitle}>{serviceTitle(job)}</Text>
           <StatusPill status={job.status} />
         </View>
- 
+
         {job.description ? (
           <Text style={styles.cardDescription} numberOfLines={2}>
             {job.description}
           </Text>
         ) : null}
- 
+
         <View style={styles.infoRow}>
           {Number.isFinite(Number(job.acceptedPrice)) && (
             <Text style={styles.price}>{DKK(Number(job.acceptedPrice))}</Text>
           )}
         </View>
- 
+
         {img && (
           <View style={styles.imageWrap}>
             <Image source={{ uri: img }} style={styles.image} resizeMode="cover" />
           </View>
         )}
- 
+
         <NextStep job={job} />
- 
+
         <View style={styles.actionsRow}>
           <TouchableOpacity onPress={() => openDetail(job)} style={styles.btnDark}>
             <Text style={styles.btnDarkText}>Detaljer</Text>
           </TouchableOpacity>
- 
+
           <TouchableOpacity onPress={() => openChat(job)} style={styles.btnPrimary}>
             <Text style={styles.btnPrimaryText}>Åbn chat</Text>
           </TouchableOpacity>
         </View>
- 
+
         {canPay && (
           <TouchableOpacity onPress={() => goToPayment(job)} style={styles.btnPrimaryLarge}>
             <Text style={styles.btnPrimaryText}>
@@ -294,7 +344,7 @@ export default function OwnerAssignedScreen() {
             </Text>
           </TouchableOpacity>
         )}
- 
+
         {canReview && (
           <TouchableOpacity onPress={() => openReview(job)} style={styles.btnSuccess}>
             <Text style={styles.btnSuccessText}>Anmeld mekaniker</Text>
@@ -303,7 +353,7 @@ export default function OwnerAssignedScreen() {
       </View>
     );
   };
- 
+
   if (loading) {
     return (
       <View style={styles.loader}>
@@ -312,7 +362,7 @@ export default function OwnerAssignedScreen() {
       </View>
     );
   }
- 
+
   return (
     <ScrollView
       style={styles.container}
@@ -320,9 +370,9 @@ export default function OwnerAssignedScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <Text style={styles.title}>Mine igangværende opgaver</Text>
- 
+
       <Text style={styles.sectionTitle}>Aktive</Text>
- 
+
       {active.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyText}>Du har ingen aktive opgaver lige nu.</Text>
@@ -336,7 +386,7 @@ export default function OwnerAssignedScreen() {
           scrollEnabled={false}
         />
       )}
- 
+
       {!!err && <Text style={styles.errorText}>Fejl: {err}</Text>}
     </ScrollView>
   );

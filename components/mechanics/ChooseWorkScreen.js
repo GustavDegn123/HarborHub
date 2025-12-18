@@ -31,6 +31,116 @@ const RECOMMENDED = [
   "electrical.troubleshoot",
 ];
 
+/* =========================
+   Helpers (MANGLEDE)
+========================= */
+
+/** Returnér true hvis node ligner et "leaf" (har id+name og ingen children) */
+function isLeaf(node) {
+  return !!node && !!node.id && !!node.name && !Array.isArray(node.children);
+}
+
+/** Flad liste af leaf-noder (id+name) */
+function flattenLeaves(nodes, acc = []) {
+  if (!Array.isArray(nodes)) return acc;
+
+  for (const n of nodes) {
+    if (!n) continue;
+
+    if (Array.isArray(n.children) && n.children.length > 0) {
+      flattenLeaves(n.children, acc);
+    } else if (n.id && n.name) {
+      acc.push({ id: String(n.id), name: String(n.name) });
+    }
+  }
+
+  return acc;
+}
+
+/** Saml leaf-ids under en node (category/subcategory/leaf) */
+function collectLeafIds(node) {
+  if (!node) return [];
+  if (Array.isArray(node.children) && node.children.length > 0) {
+    return flattenLeaves(node.children).map((x) => x.id);
+  }
+  return node.id ? [String(node.id)] : [];
+}
+
+/** Normaliser query */
+function norm(s) {
+  return String(s || "").trim().toLowerCase();
+}
+
+/**
+ * Filtrér kataloget på søgning:
+ * - matcher kategori -> behold hele kategorien
+ * - matcher subkategori -> behold kun den subkategori (evt. filtreret)
+ * - matcher leaf -> behold leaf
+ */
+function filterCatalog(catalog, query) {
+  const q = norm(query);
+  if (!q) return Array.isArray(catalog) ? catalog : [];
+
+  const walk = (node) => {
+    if (!node) return null;
+
+    const name = norm(node.name);
+    const selfMatch = name.includes(q);
+
+    // Har children -> kategori/subkategori
+    if (Array.isArray(node.children)) {
+      // Hvis kategorien selv matcher, behold alt (bedre UX)
+      if (selfMatch) return node;
+
+      const kids = node.children
+        .map((c) => walk(c))
+        .filter(Boolean);
+
+      if (kids.length === 0) return null;
+
+      return { ...node, children: kids };
+    }
+
+    // Leaf
+    if (isLeaf(node)) {
+      return selfMatch ? node : null;
+    }
+
+    return null;
+  };
+
+  return (Array.isArray(catalog) ? catalog : [])
+    .map((c) => walk(c))
+    .filter(Boolean);
+}
+
+/**
+ * Hvis du modtager et “fladt” katalog (fx [{id,name}, ...] uden children),
+ * så wrap det i en kategori så UI stadig virker.
+ */
+function normalizeCatalogShape(data) {
+  if (!Array.isArray(data)) return [];
+
+  const hasAnyChildren = data.some((x) => Array.isArray(x?.children));
+  if (hasAnyChildren) return data;
+
+  // flad liste -> wrap som én kategori
+  return [
+    {
+      id: "all_services",
+      name: "Ydelser",
+      children: data.map((x) => ({
+        id: String(x.id),
+        name: String(x.name || x.title || x.id),
+      })),
+    },
+  ];
+}
+
+/* =========================
+   Screen
+========================= */
+
 export default function ChooseWorkScreen({ navigation }) {
   const auth = getAuth();
   const user = auth.currentUser;
@@ -45,10 +155,14 @@ export default function ChooseWorkScreen({ navigation }) {
   // Hent katalog + lokalt gemt valg
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
       try {
         const data = await getAvailableServices();
-        if (!cancelled) setCatalog(Array.isArray(data) ? data : []);
+        const shaped = normalizeCatalogShape(data);
+
+        if (!cancelled) setCatalog(Array.isArray(shaped) ? shaped : []);
+
         // preload saved
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
         if (raw && !cancelled) {
@@ -57,17 +171,19 @@ export default function ChooseWorkScreen({ navigation }) {
         }
       } catch (err) {
         console.warn("Kunne ikke hente services:", err);
+        if (!cancelled) setCatalog([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
   }, []);
 
   // Fladt indeks (bruges til tællere m.m.)
-  const leaves = useMemo(() => flattenLeaves(catalog), [catalog]);
+  const leaves = useMemo(() => flattenLeaves(catalog), [catalog]); // <-- nu findes flattenLeaves
 
   const selectedCount = useMemo(
     () => Object.values(selected).filter(Boolean).length,
@@ -198,22 +314,22 @@ export default function ChooseWorkScreen({ navigation }) {
 
         {expanded[cat.id] &&
           (cat.children || []).map((node) =>
-            node.children?.length
-              ? (
-                <View key={node.id} style={styles.subCategoryBlock}>
-                  <View style={styles.subHeaderRow}>
-                    <Text style={styles.subHeader}>{node.name}</Text>
-                    <TouchableOpacity
-                      onPress={() => onSelectCategoryAll(node)}
-                      style={styles.subSmallBtn}
-                    >
-                      <Text style={styles.subSmallBtnText}>Vælg alle</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {node.children.map((leaf) => renderLeaf(leaf))}
+            node.children?.length ? (
+              <View key={node.id} style={styles.subCategoryBlock}>
+                <View style={styles.subHeaderRow}>
+                  <Text style={styles.subHeader}>{node.name}</Text>
+                  <TouchableOpacity
+                    onPress={() => onSelectCategoryAll(node)}
+                    style={styles.subSmallBtn}
+                  >
+                    <Text style={styles.subSmallBtnText}>Vælg alle</Text>
+                  </TouchableOpacity>
                 </View>
-                )
-              : renderLeaf(node)
+                {node.children.map((leaf) => renderLeaf(leaf))}
+              </View>
+            ) : (
+              renderLeaf(node)
+            )
           )}
       </View>
     );
@@ -243,7 +359,7 @@ export default function ChooseWorkScreen({ navigation }) {
 
       <FlatList
         data={filteredCatalog}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderCategory}
         contentContainerStyle={styles.listContent}
       />
@@ -265,7 +381,11 @@ export default function ChooseWorkScreen({ navigation }) {
         {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.doneButtonText}>Færdig</Text>}
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.navigate("StartTakingJobs")} style={styles.cancelButton} disabled={saving}>
+      <TouchableOpacity
+        onPress={() => navigation.navigate("StartTakingJobs")}
+        style={styles.cancelButton}
+        disabled={saving}
+      >
         <Text style={styles.cancelButtonText}>Tilbage</Text>
       </TouchableOpacity>
     </View>

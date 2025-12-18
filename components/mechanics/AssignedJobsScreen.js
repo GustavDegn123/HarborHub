@@ -1,14 +1,32 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { View, Text, FlatList, ActivityIndicator, TouchableOpacity } from "react-native";
 import { getAuth } from "firebase/auth";
 import { db } from "../../firebase";
 import { collection, onSnapshot, query, orderBy, doc, getDoc } from "firebase/firestore";
-import styles from "../../styles/mechanics/assignedJobsStyles"; // ← new, dedicated styles
+import styles from "../../styles/mechanics/assignedJobsStyles";
 
 function DKK(n) {
   return Number.isFinite(Number(n))
-    ? new Intl.NumberFormat("da-DK", { style: "currency", currency: "DKK", maximumFractionDigits: 0 }).format(Number(n))
+    ? new Intl.NumberFormat("da-DK", {
+        style: "currency",
+        currency: "DKK",
+        maximumFractionDigits: 0,
+      }).format(Number(n))
     : "—";
+}
+
+/** Flatten service catalog -> [{id,name}] */
+function flattenLeaves(nodes, acc = []) {
+  if (!Array.isArray(nodes)) return acc;
+  for (const n of nodes) {
+    if (!n) continue;
+    if (Array.isArray(n.children) && n.children.length) {
+      flattenLeaves(n.children, acc);
+    } else if (n?.id && n?.name) {
+      acc.push({ id: String(n.id), name: String(n.name) });
+    }
+  }
+  return acc;
 }
 
 export default function AssignedJobsScreen({ navigation }) {
@@ -18,12 +36,49 @@ export default function AssignedJobsScreen({ navigation }) {
   const [rows, setRows] = useState([]);
   const [jobsMap, setJobsMap] = useState({});
 
+  // service id -> name map
+  const [serviceNameById, setServiceNameById] = useState({});
+
+  // 1) Hent service-katalog (til visning)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "meta", "service_catalog"));
+        const catalog = snap.exists() ? snap.data()?.catalog : null;
+
+        const leaves = flattenLeaves(Array.isArray(catalog) ? catalog : []);
+        const map = {};
+        for (const l of leaves) map[l.id] = l.name;
+
+        if (alive) setServiceNameById(map);
+      } catch {
+        if (alive) setServiceNameById({});
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const serviceTitle = useCallback(
+    (job) =>
+      job?.service_name ||
+      serviceNameById[job?.service_type] ||
+      job?.service_type ||
+      "Opgave",
+    [serviceNameById]
+  );
+
+  // 2) Lyt på providers/{uid}/assigned_jobs
   useEffect(() => {
     if (!uid) {
       setLoading(false);
       setRows([]);
       return;
     }
+
     const qRef = query(
       collection(db, "providers", uid, "assigned_jobs"),
       orderBy("assigned_at", "desc")
@@ -41,11 +96,14 @@ export default function AssignedJobsScreen({ navigation }) {
         setLoading(false);
       }
     );
+
     return off;
   }, [uid]);
 
+  // 3) Hent de tilhørende service_requests docs (for titel/desc osv.)
   useEffect(() => {
     let alive = true;
+
     (async () => {
       const missing = rows
         .map((r) => r.job_id || r.id)
@@ -62,10 +120,12 @@ export default function AssignedJobsScreen({ navigation }) {
           console.warn("fetch service_request failed:", jobId, e?.message || e);
         }
       }
+
       if (alive && Object.keys(entries).length) {
         setJobsMap((prev) => ({ ...prev, ...entries }));
       }
     })();
+
     return () => {
       alive = false;
     };
@@ -75,21 +135,26 @@ export default function AssignedJobsScreen({ navigation }) {
     const enriched = rows.map((r) => {
       const jobId = r.job_id || r.id;
       const job = jobsMap[jobId] || null;
+
       const status = String(r.status || job?.status || "").toLowerCase();
       const inProgress = status === "in_progress";
       const assigned = status === "assigned";
 
       const price =
-        Number.isFinite(Number(r.price)) ? r.price :
-        Number.isFinite(Number(job?.acceptedPrice)) ? job.acceptedPrice :
-        job?.budget;
+        Number.isFinite(Number(r.price))
+          ? Number(r.price)
+          : Number.isFinite(Number(job?.acceptedPrice))
+          ? Number(job.acceptedPrice)
+          : Number.isFinite(Number(job?.budget))
+          ? Number(job.budget)
+          : null;
 
       return {
         key: jobId,
         status,
         inProgress,
         assigned,
-        title: job?.service_type || "Opgave",
+        title: serviceTitle(job),
         description: job?.description || "",
         owner_id: job?.owner_id,
         acceptedPrice: price,
@@ -108,7 +173,7 @@ export default function AssignedJobsScreen({ navigation }) {
     });
 
     return visible;
-  }, [rows, jobsMap]);
+  }, [rows, jobsMap, serviceTitle]);
 
   const openDetails = (jobId) => navigation.navigate("JobDetail", { jobId });
 
@@ -165,18 +230,18 @@ export default function AssignedJobsScreen({ navigation }) {
             )}
 
             <View style={styles.rowButtons}>
-              <TouchableOpacity
-                style={styles.btnDark}
-                onPress={() => openDetails(item.key)}
-              >
+              <TouchableOpacity style={styles.btnDark} onPress={() => openDetails(item.key)}>
                 <Text style={styles.btnDarkText}>Detaljer</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.btnPrimary}
-                onPress={() => openChat(item.job)}
+                onPress={() => (item.job ? openChat(item.job) : null)}
+                disabled={!item.job}
               >
-                <Text style={styles.btnPrimaryText}>Åbn chat</Text>
+                <Text style={styles.btnPrimaryText}>
+                  {item.job ? "Åbn chat" : "Henter…"}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
