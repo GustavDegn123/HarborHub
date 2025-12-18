@@ -1,5 +1,6 @@
 // /components/boatowners/NewRequestScreen.js
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   ScrollView,
   View,
@@ -83,6 +84,11 @@ export default function NewRequestScreen({ navigation, route }) {
   const [boats, setBoats] = useState([]);
   const [boatId, setBoatId] = useState("");
 
+  const boatIdRef = useRef("");
+useEffect(() => {
+  boatIdRef.current = boatId;
+}, [boatId]);
+
   const [catalog, setCatalog] = useState([]);
   const [serviceQuery, setServiceQuery] = useState("");
   const [serviceType, setServiceType] = useState(""); // leaf-ID
@@ -126,6 +132,36 @@ export default function NewRequestScreen({ navigation, route }) {
       alive = false;
     };
   }, []);
+
+  useFocusEffect(
+  useCallback(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        const ownerId = auth.currentUser?.uid;
+        if (!ownerId) return;
+
+        const boatsArr = await getBoats(ownerId);
+        if (!alive) return;
+
+        const nextBoats = Array.isArray(boatsArr) ? boatsArr : [];
+        setBoats(nextBoats);
+
+        // Hvis der ikke er valgt en båd endnu, vælg automatisk den første
+        if (!boatIdRef.current && nextBoats.length > 0) {
+          setBoatId(nextBoats[0].id);
+        }
+      } catch (err) {
+        console.error("Fejl ved refresh af både:", err);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [])
+);
 
   /* -------- MapPicker return -------- */
   useEffect(() => {
