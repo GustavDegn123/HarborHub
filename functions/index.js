@@ -4,7 +4,7 @@ const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const Stripe = require("stripe");
-const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY"); // 👈 NY
+const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
 
 admin.initializeApp();
 const db = admin.firestore();
