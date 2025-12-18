@@ -34,7 +34,7 @@ Mundtlig prøve på baggrund af skriftligt produkt (gruppeopgave + individuel mu
 ## Sådan kører du projektet lokalt
 
 ### 1) Forudsætninger
-- Node.js (LTS anbefales)
+- Node.js
 - Git
 - **Expo Go** (på telefon) og/eller:
   - Xcode (iOS) til iOS Simulator
