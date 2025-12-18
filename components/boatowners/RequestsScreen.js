@@ -9,7 +9,8 @@ import {
   RefreshControl,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { auth } from "../../firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../../firebase";
 import styles from "../../styles/boatowners/requestsStyles";
 import {
   listenOwnerRequestsSafe,
@@ -100,12 +101,62 @@ const isAwardedStatus = (status) => {
   return ["assigned", "in_progress", "completed", "paid"].includes(slug);
 };
 
+/* ---------- Service katalog helpers ---------- */
+function flattenLeaves(nodes, acc = []) {
+  if (!Array.isArray(nodes)) return acc;
+  for (const n of nodes) {
+    if (Array.isArray(n?.children) && n.children.length) {
+      flattenLeaves(n.children, acc);
+    } else if (n?.id && n?.name) {
+      acc.push({ id: String(n.id), name: String(n.name) });
+    }
+  }
+  return acc;
+}
+
 export default function RequestsScreen() {
   const navigation = useNavigation();
+
   const [rows, setRows] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const [serviceNameById, setServiceNameById] = useState({});
+
   const bidUnsubsRef = useRef(new Map());
   const stopBidsWatchRef = useRef(null); // stop-funktion til lokal-notifikations-watcher
+
+  /* Hent service-katalog (id -> name) fra Firestore */
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "meta", "service_catalog"));
+        const catalog = snap.exists() ? snap.data()?.catalog : null;
+
+        const leaves = flattenLeaves(Array.isArray(catalog) ? catalog : []);
+        const map = {};
+        for (const l of leaves) map[l.id] = l.name;
+
+        if (alive) setServiceNameById(map);
+      } catch (e) {
+        if (alive) setServiceNameById({});
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const serviceTitle = useCallback(
+    (item) =>
+      item?.service_name ||
+      serviceNameById[item?.service_type] ||
+      item?.service_type ||
+      "Serviceopgave",
+    [serviceNameById]
+  );
 
   /* Lyt til ejerens requests */
   useEffect(() => {
@@ -114,16 +165,18 @@ export default function RequestsScreen() {
       setRows([]);
       return;
     }
+
     const unsub = listenOwnerRequestsSafe(
       ownerId,
       (list) => setRows((list || []).map((r) => ({ ...r }))),
       () => setRows([])
     );
+
     return () => {
       unsub?.();
       bidUnsubsRef.current.forEach((u) => u?.());
       bidUnsubsRef.current.clear();
-      // stop evt. kørende bid-watcher
+
       stopBidsWatchRef.current?.();
       stopBidsWatchRef.current = null;
     };
@@ -132,8 +185,11 @@ export default function RequestsScreen() {
   /* Lyt til antal bud pr. request (UI badge) */
   useEffect(() => {
     if (!Array.isArray(rows)) return;
+
     const next = new Map(bidUnsubsRef.current);
+
     rows.forEach((r) => {
+      if (!r?.id) return;
       if (!next.has(r.id)) {
         const u = listenBidsCount(r.id, (n) => {
           setRows((prev) =>
@@ -145,6 +201,7 @@ export default function RequestsScreen() {
         next.set(r.id, u);
       }
     });
+
     // oprydning for fjernede jobs
     for (const [jobId, u] of next.entries()) {
       if (!rows.find((x) => x.id === jobId)) {
@@ -152,18 +209,18 @@ export default function RequestsScreen() {
         next.delete(jobId);
       }
     }
+
     bidUnsubsRef.current = next;
   }, [rows?.length]);
 
   /* Start/Genstart lokal-notifikations-watcher for aktive jobs */
   useEffect(() => {
     if (!Array.isArray(rows)) return;
-    // Lyt kun på jobs som ikke er afsluttet/anmeldt
+
     const activeJobIds = rows
       .filter((r) => !["reviewed", "completed"].includes(normalizeStatus(r?.status)))
       .map((r) => r.id);
 
-    // Genstart kun når set ændrer sig
     stopBidsWatchRef.current?.();
     stopBidsWatchRef.current =
       activeJobIds.length > 0 ? watchBidsForJobs(activeJobIds) : null;
@@ -172,6 +229,7 @@ export default function RequestsScreen() {
   /* Filtrér/Sorter (skjul “reviewed”/“anmeldt”) */
   const items = useMemo(() => {
     if (!Array.isArray(rows)) return null;
+
     const filtered = rows.filter((r) => normalizeStatus(r?.status) !== "reviewed");
     filtered.sort(
       (a, b) =>
@@ -199,7 +257,7 @@ export default function RequestsScreen() {
   const renderItem = ({ item }) => {
     const bidsCount = Number(item?.bidsCount) || 0;
     const loc = item?.location?.label || "";
-    const awarded = isAwardedStatus(item.status);
+    const awarded = isAwardedStatus(item?.status);
 
     return (
       <TouchableOpacity
@@ -207,13 +265,11 @@ export default function RequestsScreen() {
         onPress={() => navigation.navigate("RequestBids", { jobId: item.id })}
       >
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>
-            {(item.service_type || "Serviceopgave").toUpperCase()}
-          </Text>
-          {renderStatusChip(item.status)}
+          <Text style={styles.cardTitle}>{serviceTitle(item)}</Text>
+          {renderStatusChip(item?.status)}
         </View>
 
-        {!!item.description && (
+        {!!item?.description && (
           <Text style={styles.description} numberOfLines={3}>
             {item.description}
           </Text>
@@ -221,7 +277,7 @@ export default function RequestsScreen() {
 
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>Budget</Text>
-          <Text style={styles.metaValue}>{DKK(Number(item.budget))}</Text>
+          <Text style={styles.metaValue}>{DKK(Number(item?.budget))}</Text>
         </View>
 
         <View style={styles.metaRow}>

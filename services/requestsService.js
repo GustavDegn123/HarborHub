@@ -38,12 +38,10 @@ export async function addRequest(ownerId, boatId, data) {
   const payload = {
     owner_id: ownerId || null,
     boat_id: boatId || null,
-
-    // medtag hele payload (image, deadlineType, specificTime osv.)
     ...data,
 
-    // normaliser kritiske felter
     service_type: data?.service_type ?? "",
+    service_name: data?.service_name ?? null,   // 👈 tilføj
     description: data?.description ?? "",
     budget:
       typeof data?.budget === "string"
@@ -58,6 +56,7 @@ export async function addRequest(ownerId, boatId, data) {
   const docRef = await addDoc(ref, payload);
   return docRef.id;
 }
+
 
 /* =========================
    READ – Requests
