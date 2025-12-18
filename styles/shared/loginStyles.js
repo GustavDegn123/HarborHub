@@ -1,3 +1,4 @@
+// /styles/shared/loginStyles.js
 import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
@@ -14,57 +15,6 @@ export default StyleSheet.create({
     alignSelf: "center",
     marginBottom: 30,
   },
-  socialButton: {
-    padding: 15,
-    borderRadius: 8,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  appleButton: {
-    backgroundColor: "#000",
-  },
-  facebookButton: {
-    backgroundColor: "#1877f2",
-  },
-  googleButton: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#ccc",
-  },
-  socialContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  icon: {
-    width: 20,
-    height: 20,
-    resizeMode: "contain",
-    marginRight: 8,
-  },
-  appleText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  socialText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  dividerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 20,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#ccc",
-  },
-  dividerText: {
-    marginHorizontal: 10,
-    color: "#666",
-  },
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
@@ -78,6 +28,9 @@ export default StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     marginTop: 10,
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
   },
   loginText: {
     color: "#fff",
