@@ -1,4 +1,4 @@
 # Node / JS
 node_modules/
-.env*
+.env
 .expo/
