@@ -1,5 +1,4 @@
-// /components/boatowners/NewRequestScreen.js
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   ScrollView,
@@ -11,10 +10,7 @@ import {
   ActivityIndicator,
   Platform,
   Image,
-  Animated,
   KeyboardAvoidingView,
-  UIManager,
-  LayoutAnimation,
 } from "react-native";
 import Checkbox from "expo-checkbox";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -31,13 +27,7 @@ import { getAvailableServices } from "../../services/providersService";
 
 import styles, { colors } from "../../styles/boatowners/newRequestStyles";
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-/* -------------------------------------------
-   Hjælpere til service-katalog (træ -> blade)
--------------------------------------------- */
+/* Træ -> leaves */
 function flattenLeaves(nodes, acc = []) {
   if (!Array.isArray(nodes)) return acc;
   for (const n of nodes) {
@@ -50,48 +40,34 @@ function flattenLeaves(nodes, acc = []) {
   return acc;
 }
 
+/* Upload helper */
+async function uriToBlob(uri) {
+  return await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.onload = () => resolve(xhr.response);
+    xhr.onerror = () => reject(new TypeError("Netværksrequest fejlede."));
+    xhr.responseType = "blob";
+    xhr.open("GET", uri, true);
+    xhr.send(null);
+  });
+}
+
 export default function NewRequestScreen({ navigation, route }) {
-  /* -------- Wizard state -------- */
   const steps = ["Placering & båd", "Service", "Budget & tid", "Detaljer"];
-  const [step, setStep] = useState(0); // 0..3
+  const [step, setStep] = useState(0);
 
-  // Smooth transitions
-  const fade = useRef(new Animated.Value(1)).current;
-  const slide = useRef(new Animated.Value(0)).current; // 0 -> synlig, 1 -> ud
-  const [renderKey, setRenderKey] = useState(0);
+  const scrollRef = useRef(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, [step]);
 
-  const animateToStep = (nextStep) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    Animated.parallel([
-      Animated.timing(fade, { toValue: 0, duration: 140, useNativeDriver: true }),
-      Animated.timing(slide, { toValue: 1, duration: 140, useNativeDriver: true }),
-    ]).start(() => {
-      setRenderKey(nextStep);
-      setStep(nextStep);
-      fade.setValue(0);
-      slide.setValue(1);
-      Animated.parallel([
-        Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }),
-        Animated.timing(slide, { toValue: 0, duration: 220, useNativeDriver: true }),
-      ]).start();
-    });
-  };
-
-  const canPrev = step > 0;
-  const canNext = step < steps.length - 1;
-
-  /* -------- Data state -------- */
+  /* Data */
   const [boats, setBoats] = useState([]);
   const [boatId, setBoatId] = useState("");
 
-  const boatIdRef = useRef("");
-useEffect(() => {
-  boatIdRef.current = boatId;
-}, [boatId]);
-
   const [catalog, setCatalog] = useState([]);
   const [serviceQuery, setServiceQuery] = useState("");
-  const [serviceType, setServiceType] = useState(""); // leaf-ID
+  const [serviceType, setServiceType] = useState("");
   const [serviceName, setServiceName] = useState("");
 
   const [description, setDescription] = useState("");
@@ -101,15 +77,17 @@ useEffect(() => {
   const [selectedTime, setSelectedTime] = useState("");
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   const [image, setImage] = useState(null);
 
   // Placering
   const [picked, setPicked] = useState(null); // { lat, lng, label }
-  const [address, setAddress] = useState(""); // manuel adresse
+  const [address, setAddress] = useState("");
 
-  /* -------- Load båd + services -------- */
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  /* Init: boats + services */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -120,7 +98,11 @@ useEffect(() => {
           getAvailableServices().catch(() => []),
         ]);
         if (!alive) return;
-        setBoats(Array.isArray(boatsArr) ? boatsArr : []);
+
+        const nextBoats = Array.isArray(boatsArr) ? boatsArr : [];
+        setBoats(nextBoats);
+        if (!boatId && nextBoats.length > 0) setBoatId(nextBoats[0].id);
+
         setCatalog(Array.isArray(servicesArr) ? servicesArr : []);
       } catch (err) {
         console.error("Init fejl:", err);
@@ -128,95 +110,105 @@ useEffect(() => {
         if (alive) setLoading(false);
       }
     })();
+
     return () => {
       alive = false;
     };
-  }, []);
+  }, []); // kun mount
 
+  /* Refresh boats når man kommer tilbage (fx efter BoatForm) */
   useFocusEffect(
-  useCallback(() => {
-    let alive = true;
+    useCallback(() => {
+      let alive = true;
+      (async () => {
+        try {
+          const ownerId = auth.currentUser?.uid;
+          if (!ownerId) return;
 
-    (async () => {
-      try {
-        const ownerId = auth.currentUser?.uid;
-        if (!ownerId) return;
+          const boatsArr = await getBoats(ownerId);
+          if (!alive) return;
 
-        const boatsArr = await getBoats(ownerId);
-        if (!alive) return;
+          const nextBoats = Array.isArray(boatsArr) ? boatsArr : [];
+          setBoats(nextBoats);
 
-        const nextBoats = Array.isArray(boatsArr) ? boatsArr : [];
-        setBoats(nextBoats);
-
-        // Hvis der ikke er valgt en båd endnu, vælg automatisk den første
-        if (!boatIdRef.current && nextBoats.length > 0) {
-          setBoatId(nextBoats[0].id);
+          // behold valgt båd hvis den stadig findes, ellers vælg første
+          if (nextBoats.length > 0) {
+            const stillExists = nextBoats.some((b) => b.id === boatId);
+            if (!boatId || !stillExists) setBoatId(nextBoats[0].id);
+          } else {
+            setBoatId("");
+          }
+        } catch (err) {
+          console.error("Fejl ved refresh af både:", err);
         }
-      } catch (err) {
-        console.error("Fejl ved refresh af både:", err);
-      }
-    })();
+      })();
 
-    return () => {
-      alive = false;
-    };
-  }, [])
-);
+      return () => {
+        alive = false;
+      };
+    }, [boatId])
+  );
 
-  /* -------- MapPicker return -------- */
+  /* MapPicker return */
   useEffect(() => {
     const pl = route?.params?.pickedLocation;
     if (pl?.lat && pl?.lng) {
       setPicked(pl);
-      if (pl?.label && !address) setAddress(pl.label);
+      if (pl?.label) setAddress(pl.label);
     }
-  }, [route?.params?.pickedLocation, address]);
+  }, [route?.params?.pickedLocation]);
 
-  /* -------- Geocode adresse -------- */
+  /* Leaves (services) */
+  const leaves = useMemo(() => {
+    const raw = flattenLeaves(catalog);
+    // hvis catalog allerede er flad {id,name} uden children, vil flattenLeaves stadig virke
+    return raw.sort((a, b) => a.name.localeCompare(b.name, "da"));
+  }, [catalog]);
+
+  const filteredLeaves = useMemo(() => {
+    const q = serviceQuery.trim().toLowerCase();
+    if (!q) return leaves;
+    return leaves.filter(
+      (l) => l.name.toLowerCase().includes(q) || l.id.toLowerCase().includes(q)
+    );
+  }, [leaves, serviceQuery]);
+
+  const onPickService = (leaf) => {
+    setServiceType(leaf.id);
+    setServiceName(leaf.name);
+  };
+
+  /* Geocode adresse */
   const geocodeAddress = useCallback(async () => {
-    if (!address.trim())
-      return Alert.alert("Adresse mangler", "Skriv en adresse.");
+    if (!address.trim()) return Alert.alert("Adresse mangler", "Skriv en adresse.");
     try {
       const res = await Location.geocodeAsync(address.trim());
-      if (!res?.length)
+      if (!res?.length) {
         return Alert.alert(
           "Ikke fundet",
           "Kunne ikke finde adressen. Vælg på kortet i stedet."
         );
+      }
       const { latitude, longitude } = res[0];
-      const pl = { lat: latitude, lng: longitude, label: address.trim() };
-      setPicked(pl);
+      setPicked({ lat: latitude, lng: longitude, label: address.trim() });
       Alert.alert("OK", "Placering sat ud fra adressen.");
     } catch {
       Alert.alert("Fejl", "Kunne ikke slå adressen op. Vælg på kortet.");
     }
   }, [address]);
 
-  /* -------- Map -------- */
   const openMap = useCallback(() => {
     const start = picked ? { lat: picked.lat, lng: picked.lng } : undefined;
     navigation.navigate("MapPicker", { start, returnTo: "NewRequest" });
   }, [navigation, picked]);
 
-  /* -------- Dato -------- */
+  /* Date */
   const onChangeDate = (event, selectedDate) => {
-    const currentDate = selectedDate || date;
-    setShowDatePicker(Platform.OS === "ios");
-    setDate(currentDate);
+    if (selectedDate) setDate(selectedDate);
+    if (Platform.OS !== "ios") setShowDatePicker(false);
   };
 
-  /* -------- Billed-upload -------- */
-  async function uriToBlob(uri) {
-    return await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.onload = () => resolve(xhr.response);
-      xhr.onerror = () => reject(new TypeError("Netværksrequest fejlede."));
-      xhr.responseType = "blob";
-      xhr.open("GET", uri, true);
-      xhr.send(null);
-    });
-  }
-
+  /* Images */
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -247,39 +239,49 @@ useEffect(() => {
     const storageRef = ref(storage, path);
     const metadata = { contentType: `image/${ext === "jpg" ? "jpeg" : ext}` };
     await uploadBytes(storageRef, blob, metadata);
-    const url = await getDownloadURL(storageRef);
-    return url;
+    return await getDownloadURL(storageRef);
   }
 
-  /* -------- Services (blade) -------- */
-  const leaves = useMemo(() => flattenLeaves(catalog), [catalog]);
-  const filteredLeaves = useMemo(() => {
-    const q = serviceQuery.trim().toLowerCase();
-    if (!q) return leaves;
-    return leaves.filter(
-      (l) => l.name.toLowerCase().includes(q) || l.id.toLowerCase().includes(q)
-    );
-  }, [leaves, serviceQuery]);
-
-  const onPickService = (leaf) => {
-    setServiceType(leaf.id);
-    setServiceName(leaf.name);
+  /* Validation */
+  const validateStep = (idx) => {
+    if (idx === 0) return !!picked && !!boatId;
+    if (idx === 1) return !!serviceType;
+    if (idx === 2) return !!budget && (selectedOption === "Fleksibel" || !!date);
+    return true;
   };
 
-  /* -------- Submit -------- */
+  const next = () => {
+    if (!validateStep(step)) {
+      if (step === 0) return Alert.alert("Tjek trin 1", "Vælg placering og båd.");
+      if (step === 1) return Alert.alert("Tjek trin 2", "Vælg en service.");
+      if (step === 2) return Alert.alert("Tjek trin 3", "Angiv budget og evt. dato.");
+    }
+    if (step < steps.length - 1) setStep(step + 1);
+  };
+
+  const prev = () => {
+    if (step > 0) setStep(step - 1);
+  };
+
+  const jumpBackTo = (idx) => {
+    if (idx < step) setStep(idx);
+  };
+
+  /* Submit */
   const handleSave = async () => {
     if (!boatId) return Alert.alert("Fejl", "Vælg en båd først.");
     if (!serviceType) return Alert.alert("Fejl", "Vælg en service.");
     if (!budget) return Alert.alert("Fejl", "Indtast et budget.");
     if (!picked?.lat || !picked?.lng) {
-      return Alert.alert(
-        "Vælg placering",
-        "Vælg en placering (adresse eller kort)."
-      );
+      return Alert.alert("Vælg placering", "Vælg en placering (adresse eller kort).");
     }
 
     try {
-      const ownerId = auth.currentUser.uid;
+      setSubmitting(true);
+
+      const ownerId = auth.currentUser?.uid;
+      if (!ownerId) throw new Error("Ikke logget ind.");
+
       let imageUrl = null;
       if (image) imageUrl = await uploadImageAsync(image, ownerId);
 
@@ -291,55 +293,30 @@ useEffect(() => {
       };
 
       await addRequest(ownerId, boatId, {
-        service_type: serviceType,          // matcher mekanikerens filtre
-        service_name: serviceName || null,  // valgfri til UI
+        service_type: serviceType,
+        service_name: serviceName || null,
         description: description?.trim() || "",
         budget: parseInt(budget, 10),
-        deadline:
-          selectedOption === "Fleksibel" ? "flexible" : Timestamp.fromDate(date),
+        deadline: selectedOption === "Fleksibel" ? "flexible" : Timestamp.fromDate(date),
         deadlineType: selectedOption,
         specificTime: isSpecificTime ? selectedTime : null,
         status: "open",
         imageUrl: imageUrl || null,
-        location,                           // til radius
+        location,
       });
 
       Alert.alert("Succes", "Opgave oprettet!", [
         {
           text: "OK",
-          onPress: () =>
-            navigation.navigate("OwnerRoot", { screen: "Requests" }),
+          onPress: () => navigation.navigate("OwnerRoot", { screen: "Requests" }),
         },
       ]);
     } catch (err) {
       console.error("Fejl ved oprettelse af request:", err);
       Alert.alert("Fejl", "Kunne ikke oprette opgaven.");
+    } finally {
+      setSubmitting(false);
     }
-  };
-
-  /* -------- UI helpers -------- */
-  const validateStep = (idx) => {
-    if (idx === 0) return !!picked && !!boatId;
-    if (idx === 1) return !!serviceType;
-    if (idx === 2) return !!budget && (selectedOption === "Fleksibel" || !!date);
-    return true;
-  };
-
-  const next = () => {
-    const ok = validateStep(step);
-    if (!ok) {
-      if (step === 0) return Alert.alert("Tjek trin 1", "Vælg placering og båd.");
-      if (step === 1) return Alert.alert("Tjek trin 2", "Vælg en service.");
-      if (step === 2) return Alert.alert("Tjek trin 3", "Angiv budget og evt. dato.");
-    }
-    if (step < steps.length - 1) animateToStep(step + 1);
-  };
-  const prev = () => {
-    if (step > 0) animateToStep(step - 1);
-  };
-
-  const jumpBackTo = (idx) => {
-    if (idx < step) animateToStep(idx); // kun tilbage
   };
 
   if (loading) {
@@ -350,8 +327,8 @@ useEffect(() => {
     );
   }
 
-  /* -------- RENDER -------- */
-  const translateY = slide.interpolate({ inputRange: [0, 1], outputRange: [0, 16] });
+  const canPrev = step > 0;
+  const canNext = step < steps.length - 1;
 
   return (
     <KeyboardAvoidingView
@@ -359,7 +336,12 @@ useEffect(() => {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 84 : 0}
     >
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.header}>Opret ny serviceopgave</Text>
 
         {/* Stepper */}
@@ -401,43 +383,53 @@ useEffect(() => {
           })}
         </View>
 
-        {/* Trin-indhold med smooth transition */}
-        <Animated.View style={{ opacity: fade, transform: [{ translateY }] }}>
-          {/* -------- STEP 1: Placering & båd -------- */}
-          {renderKey === 0 && (
-            <>
-              <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Placering</Text>
+        {/* STEP 1 */}
+        {step === 0 && (
+          <>
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Placering</Text>
 
-                <Text style={styles.label}>Adresse</Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    placeholder="Fx Svanemøllehavnen, København"
-                    value={address}
-                    onChangeText={setAddress}
-                    style={styles.input}
-                    returnKeyType="done"
-                  />
-                </View>
-
-                <View style={styles.mapBtnRow}>
-                  <TouchableOpacity onPress={geocodeAddress} style={[styles.outlineBtn, styles.btnBig]}>
-                    <Text style={styles.outlineBtnText}>Brug adressen</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={openMap} style={[styles.primaryBtn, styles.btnBig]}>
-                    <Text style={styles.primaryBtnText}>
-                      {picked ? "Redigér på kort" : "Vælg på kort"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {picked?.label ? (
-                  <Text style={styles.pickedLabel}>Valgt: {picked.label}</Text>
-                ) : null}
+              <Text style={styles.label}>Adresse</Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  placeholder="Fx Svanemøllehavnen, København"
+                  value={address}
+                  onChangeText={setAddress}
+                  style={styles.input}
+                  returnKeyType="done"
+                />
               </View>
 
-              <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Båd</Text>
+              <View style={styles.mapBtnRow}>
+                <TouchableOpacity
+                  onPress={geocodeAddress}
+                  style={[styles.outlineBtn, styles.btnBig]}
+                >
+                  <Text style={styles.outlineBtnText}>Brug adressen</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={openMap}
+                  style={[styles.primaryBtn, styles.btnBig]}
+                >
+                  <Text style={styles.primaryBtnText}>
+                    {picked ? "Redigér på kort" : "Vælg på kort"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {picked?.label ? (
+                <Text style={styles.pickedLabel}>Valgt: {picked.label}</Text>
+              ) : null}
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Båd</Text>
+
+              {boats.length === 0 ? (
+                <Text style={styles.pickedLabel}>
+                  Du har ingen både endnu. Opret en båd først.
+                </Text>
+              ) : (
                 <View style={styles.buttonGrid}>
                   {boats.map((b) => {
                     const active = boatId === b.id;
@@ -459,32 +451,71 @@ useEffect(() => {
                     );
                   })}
                 </View>
-              </View>
-            </>
-          )}
+              )}
+            </View>
+          </>
+        )}
 
-          {/* -------- STEP 2: Service -------- */}
-          {renderKey === 1 && (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Service</Text>
+        {/* STEP 2 */}
+        {step === 1 && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Service</Text>
 
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  placeholder="Søg fx 'motor', 'polering'…"
-                  value={serviceQuery}
-                  onChangeText={setServiceQuery}
-                  style={styles.input}
-                  returnKeyType="search"
-                />
-              </View>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                placeholder="Søg fx 'motor', 'polering'…"
+                value={serviceQuery}
+                onChangeText={setServiceQuery}
+                style={styles.input}
+                returnKeyType="search"
+              />
+            </View>
 
-              <View style={styles.buttonGrid}>
-                {(filteredLeaves.length ? filteredLeaves : leaves).map((leaf) => {
-                  const active = serviceType === leaf.id;
+            <View style={styles.buttonGrid}>
+              {(filteredLeaves.length ? filteredLeaves : leaves).map((leaf) => {
+                const active = serviceType === leaf.id;
+                return (
+                  <TouchableOpacity
+                    key={leaf.id}
+                    onPress={() => onPickService(leaf)}
+                    style={[styles.selectButton, active && styles.selectButtonSelected]}
+                  >
+                    <Text
+                      style={[
+                        styles.selectButtonText,
+                        active && styles.selectButtonTextSelected,
+                      ]}
+                    >
+                      {leaf.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              {!leaves.length &&
+                [
+                  "Motorservice",
+                  "Bundmaling",
+                  "Vinteropbevaring",
+                  "Polering & voks",
+                  "Riggerservice",
+                  "El-arbejde",
+                  "Reparationer",
+                ].map((name) => {
+                  const id = name
+                    .toLowerCase()
+                    .replace(/\s|&/g, "")
+                    .replace("ø", "oe")
+                    .replace("æ", "ae")
+                    .replace("å", "aa");
+                  const active = serviceType === id;
                   return (
                     <TouchableOpacity
-                      key={leaf.id}
-                      onPress={() => onPickService(leaf)}
+                      key={id}
+                      onPress={() => {
+                        setServiceType(id);
+                        setServiceName(name);
+                      }}
                       style={[styles.selectButton, active && styles.selectButtonSelected]}
                     >
                       <Text
@@ -493,208 +524,200 @@ useEffect(() => {
                           active && styles.selectButtonTextSelected,
                         ]}
                       >
-                        {leaf.name}
+                        {name}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
-
-                {!leaves.length &&
-                  ["Motorservice", "Bundmaling", "Vinteropbevaring", "Polering & voks", "Riggerservice", "El-arbejde", "Reparationer"]
-                    .map((name) => {
-                      const id = name.toLowerCase().replace(/\s|&/g, "").replace("ø","oe").replace("æ","ae").replace("å","aa");
-                      const active = serviceType === id;
-                      return (
-                        <TouchableOpacity
-                          key={id}
-                          onPress={() => { setServiceType(id); setServiceName(name); }}
-                          style={[styles.selectButton, active && styles.selectButtonSelected]}
-                        >
-                          <Text style={[styles.selectButtonText, active && styles.selectButtonTextSelected]}>{name}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-              </View>
             </View>
-          )}
+          </View>
+        )}
 
-          {/* -------- STEP 3: Budget & tid -------- */}
-          {renderKey === 2 && (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Budget & tid</Text>
+        {/* STEP 3 */}
+        {step === 2 && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Budget & tid</Text>
 
-              <Text style={styles.label}>Budget (DKK)</Text>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="numeric"
-                  placeholder="Indtast budget"
-                  value={budget}
-                  onChangeText={setBudget}
-                />
-              </View>
+            <Text style={styles.label}>Budget (DKK)</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="Indtast budget"
+                value={budget}
+                onChangeText={setBudget}
+              />
+            </View>
 
-              <Text style={styles.label}>Hvornår skal det ordnes?</Text>
-              <View style={styles.optionRow}>
-                {["På Dato", "Før Dato", "Fleksibel"].map((option) => {
-                  const active = selectedOption === option;
+            <Text style={styles.label}>Hvornår skal det ordnes?</Text>
+            <View style={styles.optionRow}>
+              {["På Dato", "Før Dato", "Fleksibel"].map((option) => {
+                const active = selectedOption === option;
+                return (
+                  <TouchableOpacity
+                    key={option}
+                    style={[styles.optionButton, active && styles.optionButtonSelected]}
+                    onPress={() => {
+                      setSelectedOption(option);
+                      setShowDatePicker(option !== "Fleksibel");
+                    }}
+                  >
+                    <Text style={[styles.optionText, active && styles.optionTextSelected]}>
+                      {option}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display="default"
+                onChange={onChangeDate}
+              />
+            )}
+
+            {selectedOption !== "Fleksibel" && (
+              <Text style={styles.dateBadge}>
+                {selectedOption === "Før Dato" ? "Senest: " : "Dato: "}
+                {date.toLocaleDateString("da-DK")}
+              </Text>
+            )}
+
+            <View style={styles.checkboxContainer}>
+              <Checkbox
+                value={isSpecificTime}
+                onValueChange={setIsSpecificTime}
+                color={colors.primary}
+              />
+              <Text style={styles.checkboxLabel}>Det skal være et specifikt tidsrum</Text>
+            </View>
+
+            {isSpecificTime && (
+              <View style={styles.timeRow}>
+                {[
+                  { label: "Morgen", sub: "Før 10" },
+                  { label: "Middag", sub: "10-14" },
+                  { label: "Eftermiddag", sub: "14-18" },
+                  { label: "Aften", sub: "Efter 18" },
+                ].map((t) => {
+                  const active = selectedTime === t.label;
                   return (
                     <TouchableOpacity
-                      key={option}
-                      style={[styles.optionButton, active && styles.optionButtonSelected]}
-                      onPress={() => {
-                        setSelectedOption(option);
-                        if (option !== "Fleksibel") setShowDatePicker(true);
-                      }}
+                      key={t.label}
+                      style={[styles.timeButton, active && styles.timeButtonSelected]}
+                      onPress={() => setSelectedTime(t.label)}
                     >
-                      <Text style={[styles.optionText, active && styles.optionTextSelected]}>
-                        {option}
-                      </Text>
+                      <Text style={styles.timeLabel}>{t.label}</Text>
+                      <Text style={styles.timeSub}>{t.sub}</Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
+            )}
+          </View>
+        )}
 
-              {showDatePicker && (
-                <DateTimePicker
-                  value={date}
-                  mode="date"
-                  display="default"
-                  onChange={onChangeDate}
+        {/* STEP 4 */}
+        {step === 3 && (
+          <>
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Beskrivelse</Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={[styles.input, styles.inputMultiline]}
+                  placeholder="Beskriv opgaven"
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
                 />
-              )}
+              </View>
+            </View>
 
-              {selectedOption !== "Fleksibel" && (
-                <Text style={styles.dateBadge}>
-                  {selectedOption === "Før Dato" ? "Senest: " : "Dato: "}
-                  {date.toLocaleDateString("da-DK")}
-                </Text>
-              )}
-
-              <View style={styles.checkboxContainer}>
-                <Checkbox
-                  value={isSpecificTime}
-                  onValueChange={setIsSpecificTime}
-                  color={colors.primary}
-                />
-                <Text style={styles.checkboxLabel}>Det skal være et specifikt tidsrum</Text>
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Billeder (valgfrit)</Text>
+              <View style={styles.imagesRow}>
+                <TouchableOpacity style={styles.outlineBtn} onPress={pickImage}>
+                  <Text style={styles.outlineBtnText}>Fra galleri</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.outlineBtn} onPress={takePhoto}>
+                  <Text style={styles.outlineBtnText}>Tag billede</Text>
+                </TouchableOpacity>
               </View>
 
-              {isSpecificTime && (
-                <View style={styles.timeRow}>
-                  {[
-                    { label: "Morgen", sub: "Før 10" },
-                    { label: "Middag", sub: "10-14" },
-                    { label: "Eftermiddag", sub: "14-18" },
-                    { label: "Aften", sub: "Efter 18" },
-                  ].map((t) => {
-                    const active = selectedTime === t.label;
-                    return (
-                      <TouchableOpacity
-                        key={t.label}
-                        style={[styles.timeButton, active && styles.timeButtonSelected]}
-                        onPress={() => setSelectedTime(t.label)}
-                      >
-                        <Text style={styles.timeLabel}>{t.label}</Text>
-                        <Text style={styles.timeSub}>{t.sub}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+              {image && (
+                <View style={styles.imagePreviewWrapper}>
+                  <Image source={{ uri: image }} style={styles.imagePreview} />
+                  <Text style={styles.imagePreviewLabel}>Billede valgt</Text>
                 </View>
               )}
             </View>
-          )}
 
-          {/* -------- STEP 4: Detaljer + billede + submit -------- */}
-          {renderKey === 3 && (
-            <>
-              <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Beskrivelse</Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={[styles.input, styles.inputMultiline]}
-                    placeholder="Beskriv opgaven"
-                    value={description}
-                    onChangeText={setDescription}
-                    multiline
-                  />
-                </View>
-              </View>
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Opsummering</Text>
+              <Text style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Båd:</Text>{" "}
+                {boats.find((b) => b.id === boatId)?.name || "-"}
+              </Text>
+              <Text style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Service:</Text>{" "}
+                {serviceName || serviceType || "-"}
+              </Text>
+              <Text style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Placering:</Text>{" "}
+                {picked?.label || "-"}
+              </Text>
+              <Text style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Budget:</Text>{" "}
+                {budget ? `${Number(budget).toLocaleString("da-DK")} kr.` : "-"}
+              </Text>
+              <Text style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Deadline:</Text>{" "}
+                {selectedOption === "Fleksibel"
+                  ? "Fleksibel"
+                  : `${selectedOption} ${date.toLocaleDateString("da-DK")}`}
+              </Text>
+            </View>
 
-              <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Billeder (valgfrit)</Text>
-                <View style={styles.imagesRow}>
-                  <TouchableOpacity style={styles.outlineBtn} onPress={pickImage}>
-                    <Text style={styles.outlineBtnText}>Fra galleri</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.outlineBtn} onPress={takePhoto}>
-                    <Text style={styles.outlineBtnText}>Tag billede</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {image && (
-                  <View style={styles.imagePreviewWrapper}>
-                    <Image source={{ uri: image }} style={styles.imagePreview} />
-                    <Text style={styles.imagePreviewLabel}>Billede valgt</Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Opsummering */}
-              <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Opsummering</Text>
-                <Text style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Båd:</Text>{" "}
-                  {boats.find((b) => b.id === boatId)?.name || "-"}
-                </Text>
-                <Text style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Service:</Text>{" "}
-                  {serviceName || serviceType || "-"}
-                </Text>
-                <Text style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Placering:</Text>{" "}
-                  {picked?.label || "-"}
-                </Text>
-                <Text style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Budget:</Text>{" "}
-                  {budget ? `${Number(budget).toLocaleString("da-DK")} kr.` : "-"}
-                </Text>
-                <Text style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Deadline:</Text>{" "}
-                  {selectedOption === "Fleksibel"
-                    ? "Fleksibel"
-                    : `${selectedOption} ${date.toLocaleDateString("da-DK")}`}
-                </Text>
-              </View>
-
-              <TouchableOpacity style={styles.submitButton} onPress={handleSave}>
-                <Text style={styles.submitButtonText}>Gem opgave</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </Animated.View>
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleSave}
+              disabled={submitting}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.submitButtonText}>
+                {submitting ? "Gemmer..." : "Gem opgave"}
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
 
       {/* Sticky wizard navigation */}
       <View style={styles.wizardNav}>
         <TouchableOpacity
           onPress={prev}
-          disabled={!canPrev}
-          style={[styles.wizardBtn, !canPrev && styles.wizardBtnDisabled]}
+          disabled={!canPrev || submitting}
+          style={[styles.wizardBtn, (!canPrev || submitting) && styles.wizardBtnDisabled]}
         >
           <Text style={styles.wizardBtnText}>Tilbage</Text>
         </TouchableOpacity>
+
         {canNext ? (
           <TouchableOpacity
             onPress={next}
             style={[
               styles.wizardBtn,
               styles.wizardBtnPrimary,
-              !validateStep(step) && styles.wizardBtnDisabled,
+              (!validateStep(step) || submitting) && styles.wizardBtnDisabled,
             ]}
-            disabled={!validateStep(step)}
+            disabled={!validateStep(step) || submitting}
           >
-            <Text style={[styles.wizardBtnText, styles.wizardBtnTextPrimary]}>Næste</Text>
+            <Text style={[styles.wizardBtnText, styles.wizardBtnTextPrimary]}>
+              Næste
+            </Text>
           </TouchableOpacity>
         ) : null}
       </View>
