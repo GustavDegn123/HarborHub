@@ -45,15 +45,20 @@ Mundtlig prøve på baggrund af skriftligt produkt (gruppeopgave + individuel mu
 git clone https://github.com/GustavDegn123/HarborHub
 cd HarborHub
 npm install
-
-### 3) Installation
-```bash
+3) Kør appen (Expo)
+bash
+Kopier kode
 npm start
+Scan QR-koden med Expo Go (Android) / Kamera (iOS), eller kør på simulator.
 
-### 4) Konfiguration (.env)
-    - Opret en .env (eller tilsvarende) i roden af projektet.
-    - Eksempel:
-    EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+4) Konfiguration (.env)
+Opret en .env (eller tilsvarende) i roden af projektet.
+
+Eksempel:
+
+env
+Kopier kode
+EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 EXPO_PUBLIC_CRIIPTO_DOMAIN=
 EXPO_PUBLIC_CRIIPTO_CLIENT_ID=
 EXPO_PUBLIC_FIREBASE_API_KEY=
