@@ -1,12 +1,5 @@
 // app.config.js
-// Load .env in local dev (EAS sets env on the build server)
 require("dotenv").config();
-
-/**
- * Note on env:
- * - Put PUBLIC values in .env (prefixed with EXPO_PUBLIC_) so they are available in the client bundle.
- * - Never put server-only secrets here (Stripe secret, OpenAI secret, etc.). Keep those in Cloud Functions / Secret Manager.
- */
 
 module.exports = {
   // ---- App identity & basics ----

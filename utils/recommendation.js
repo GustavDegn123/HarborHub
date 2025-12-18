@@ -1,16 +1,5 @@
 // utils/recommendation.js
 
-/**
- * Lille, lokalt "AI"-score der fungerer uden API-nøgler.
- * Vi scorer hvert bud på:
- *  - Pris (billigere er bedre ift. medianen)
- *  - Rating (stjerner 0-5)
- *  - Antal anmeldelser (diminishing returns)
- *  - Hvor nyt buddet er (svagt plus)
- *
- * Returnerer: { bestId, scores: { [bidId]: number }, explanation: string }
- */
-
 function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
   }
