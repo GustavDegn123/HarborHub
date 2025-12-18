@@ -32,9 +32,14 @@ const SUPPORT_EMAIL = "support@harborhub.me";
 
 export default function ProfileHubScreen({ navigation }) {
   const user = auth.currentUser;
+
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
+
   const [uploading, setUploading] = useState(false);
+
+  // ✅ Lokal “reactive” avatar state så UI opdaterer med det samme
+  const [photoURL, setPhotoURL] = useState(user?.photoURL || null);
 
   const go = (route) => navigation.navigate(route);
 
@@ -57,17 +62,30 @@ export default function ProfileHubScreen({ navigation }) {
     });
   }
 
+  function guessExtFromUri(uri) {
+    try {
+      const clean = String(uri || "").split("?")[0];
+      const m = clean.match(/\.([a-zA-Z0-9]+)$/);
+      const ext = (m?.[1] || "jpg").toLowerCase();
+      // begræns til typiske billedtyper
+      if (!["jpg", "jpeg", "png", "webp"].includes(ext)) return "jpg";
+      return ext === "jpeg" ? "jpg" : ext;
+    } catch {
+      return "jpg";
+    }
+  }
+
   async function uploadAvatarAsync(localUri) {
     if (!user?.uid) throw new Error("Ikke logget ind.");
     const uid = user.uid;
 
-    const guessed = (localUri.split(".").pop() || "jpg").toLowerCase();
-    const ext = guessed.includes("/") ? "jpg" : guessed;
+    const ext = guessExtFromUri(localUri);
     const contentType = `image/${ext === "jpg" ? "jpeg" : ext}`;
 
     const storageRef = ref(storage, `profiles/${uid}/avatar.${ext}`);
     const blob = await uriToBlob(localUri);
     await uploadBytes(storageRef, blob, { contentType });
+
     const url = await getDownloadURL(storageRef);
     return url;
   }
@@ -107,19 +125,42 @@ export default function ProfileHubScreen({ navigation }) {
   }
 
   async function handlePickAvatar() {
+    if (!user?.uid) {
+      Alert.alert("Ikke logget ind", "Log ind for at ændre profilbillede.");
+      return;
+    }
+
     try {
       const chooseAndHandle = async (source) => {
         const uri = source === "camera" ? await takePhoto() : await pickFromLibrary();
         if (!uri) return;
 
+        // ✅ Vis billedet med det samme (lokal preview)
+        const previous = photoURL;
+        setPhotoURL(uri);
+
         setUploading(true);
-        const url = await uploadAvatarAsync(uri);
 
-        // cache-bust så Image opdaterer med det samme
-        const bust = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
-        await updateProfile(user, { photoURL: bust });
+        try {
+          const url = await uploadAvatarAsync(uri);
 
-        Alert.alert("Profilbillede opdateret", "Dit profilbillede er gemt.");
+          // cache-bust så Image opdaterer med det samme
+          const bust = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
+
+          // Opdatér auth-profil (så det også er “rigtigt” efter genstart/login)
+          await updateProfile(auth.currentUser, { photoURL: bust });
+
+          // ✅ Opdatér UI-state til endelig URL (ikke kun local file://)
+          setPhotoURL(bust);
+
+          Alert.alert("Profilbillede opdateret", "Dit profilbillede er gemt.");
+        } catch (e) {
+          // Hvis upload fejler: rull tilbage til forrige billede
+          setPhotoURL(previous || null);
+          throw e;
+        } finally {
+          setUploading(false);
+        }
       };
 
       if (Platform.OS === "ios") {
@@ -144,8 +185,7 @@ export default function ProfileHubScreen({ navigation }) {
       }
     } catch (e) {
       console.error(e);
-      Alert.alert("Fejl", "Kunne ikke opdatere profilbilledet.");
-    } finally {
+      Alert.alert("Fejl", e?.message || "Kunne ikke opdatere profilbilledet.");
       setUploading(false);
     }
   }
@@ -160,7 +200,7 @@ export default function ProfileHubScreen({ navigation }) {
     }
   };
 
-  const bottomPad = tabBarHeight + insets.bottom + 16; // så nederste kort ikke ligger under tab-baren
+  const bottomPad = tabBarHeight + insets.bottom + 16;
   const openURL = (url) => Linking.openURL(url);
 
   return (
@@ -179,8 +219,9 @@ export default function ProfileHubScreen({ navigation }) {
               pressed && styles.avatarPressed,
             ]}
           >
-            {user?.photoURL ? (
-              <Image source={{ uri: user.photoURL }} style={styles.avatarImg} />
+            {photoURL ? (
+              // ✅ key tvinger remount når URL ændrer sig (løser caching/stale rendering)
+              <Image key={photoURL} source={{ uri: photoURL }} style={styles.avatarImg} />
             ) : (
               <Text style={styles.avatarInitials}>{initials}</Text>
             )}
@@ -199,7 +240,7 @@ export default function ProfileHubScreen({ navigation }) {
               {user?.email ? ` • ${user.email}` : ""}
             </Text>
             <Text style={styles.heroHint}>
-              Tryk på billedet for at {user?.photoURL ? "skifte" : "tilføje"} profilbillede
+              Tryk på billedet for at {photoURL ? "skifte" : "tilføje"} profilbillede
               {uploading ? " – uploader…" : ""}
             </Text>
           </View>
@@ -236,7 +277,7 @@ export default function ProfileHubScreen({ navigation }) {
           </Pressable>
         </View>
 
-        {/* Log ud – NÆST nederst */}
+        {/* Log ud */}
         <View style={styles.logoutCard}>
           <Pressable
             onPress={handleLogout}
@@ -250,7 +291,7 @@ export default function ProfileHubScreen({ navigation }) {
           </Pressable>
         </View>
 
-        {/* Slet konto – NEDERST */}
+        {/* Slet konto */}
         <DeleteAccountSection style={styles.deleteSection} />
       </ScrollView>
     </SafeAreaView>
