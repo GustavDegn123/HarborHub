@@ -15,7 +15,6 @@ import {
   updateDoc,
   increment,
 } from "firebase/firestore";
-import { SERVICE_CATALOG } from "../data/servicesCatalog";
 
 /* =========================
    Profiler & roller

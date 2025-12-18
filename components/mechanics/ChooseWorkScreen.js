@@ -17,7 +17,6 @@ import { getAuth } from "firebase/auth";
 
 import styles from "../../styles/mechanics/chooseWorkStyles";
 import { getAvailableServices, saveProviderServices } from "../../services/providersService";
-import { collectLeafIds, filterCatalog, flattenLeaves } from "../../utils/servicesCatalog";
 
 // (Android needs this to animate accordion open/close)
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
