@@ -1,5 +1,5 @@
 // components/boatowners/RequestBidsScreen.js
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,16 +10,26 @@ import {
   RefreshControl,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { acceptBid, listenBids, getServiceRequest } from "../../services/requestsService";
+import { doc, getDoc } from "firebase/firestore";
+
+import {
+  acceptBid,
+  listenBids,
+  getServiceRequest,
+} from "../../services/requestsService";
 import { getProviderPublicSummary } from "../../services/providersService";
 import { recommendBid } from "../../utils/recommendation";
 import styles, { sx } from "../../styles/boatowners/requestBidsStyles";
-import { auth } from "../../firebase";
+import { auth, db } from "../../firebase";
 
 /* ---------- utils ---------- */
 const DKK = (n) =>
   Number.isFinite(Number(n))
-    ? new Intl.NumberFormat("da-DK", { style: "currency", currency: "DKK", maximumFractionDigits: 0 }).format(Number(n))
+    ? new Intl.NumberFormat("da-DK", {
+        style: "currency",
+        currency: "DKK",
+        maximumFractionDigits: 0,
+      }).format(Number(n))
     : "—";
 
 const toMs = (v) =>
@@ -51,6 +61,58 @@ function Stars({ rating }) {
   );
 }
 
+/* ---------- status helpers (så chip kan vise dansk label) ---------- */
+function normalizeStatus(raw) {
+  const s = String(raw || "").trim().toLowerCase();
+  if (["open"].includes(s)) return "open";
+  if (["assigned"].includes(s)) return "assigned";
+  if (["in_progress", "in-progress"].includes(s)) return "in_progress";
+  if (["completed"].includes(s)) return "completed";
+  if (["paid"].includes(s)) return "paid";
+  if (["reviewed"].includes(s)) return "reviewed";
+
+  if (["åben", "aben", "aaben"].includes(s)) return "open";
+  if (["tildelt"].includes(s)) return "assigned";
+  if (["i_gang", "i-gang", "igang"].includes(s)) return "in_progress";
+  if (["afsluttet"].includes(s)) return "completed";
+  if (["betalt"].includes(s)) return "paid";
+  if (["anmeldt"].includes(s)) return "reviewed";
+  return "open";
+}
+
+function statusDisplay(raw) {
+  const slug = normalizeStatus(raw);
+  switch (slug) {
+    case "open":
+      return { label: "Åben", styleKey: "open" };
+    case "assigned":
+      return { label: "Tildelt", styleKey: "assigned" };
+    case "in_progress":
+      return { label: "I gang", styleKey: "in_progress" };
+    case "completed":
+      return { label: "Afsluttet", styleKey: "completed" };
+    case "paid":
+      return { label: "Betalt", styleKey: "paid" };
+    case "reviewed":
+      return { label: "Anmeldt", styleKey: "reviewed" };
+    default:
+      return { label: "Ukendt", styleKey: "unknown" };
+  }
+}
+
+/* ---------- service catalog helpers ---------- */
+function flattenLeaves(nodes, acc = []) {
+  if (!Array.isArray(nodes)) return acc;
+  for (const n of nodes) {
+    if (Array.isArray(n?.children) && n.children.length) {
+      flattenLeaves(n.children, acc);
+    } else if (n?.id && n?.name) {
+      acc.push({ id: String(n.id), name: String(n.name) });
+    }
+  }
+  return acc;
+}
+
 /* ---------- component ---------- */
 export default function RequestBidsScreen() {
   const navigation = useNavigation();
@@ -64,11 +126,49 @@ export default function RequestBidsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [requestAssigned, setRequestAssigned] = useState(false);
 
+  const [serviceNameById, setServiceNameById] = useState({});
+
   // cache af provider-summaries
   const providerCache = useRef(new Map());
 
+  /* Hent service-katalog (id -> name) fra Firestore */
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "meta", "service_catalog"));
+        const catalog = snap.exists() ? snap.data()?.catalog : null;
+
+        const leaves = flattenLeaves(Array.isArray(catalog) ? catalog : []);
+        const map = {};
+        for (const l of leaves) map[l.id] = l.name;
+
+        if (alive) setServiceNameById(map);
+      } catch {
+        if (alive) setServiceNameById({});
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const serviceTitle = useCallback(
+    (item) =>
+      item?.service_name ||
+      serviceNameById[item?.service_type] ||
+      item?.service_type ||
+      "Serviceopgave",
+    [serviceNameById]
+  );
+
   // Allerede accepteret?
-  const acceptedBidId = useMemo(() => bids.find((b) => b.accepted)?.id || null, [bids]);
+  const acceptedBidId = useMemo(
+    () => bids.find((b) => b.accepted)?.id || null,
+    [bids]
+  );
 
   // AI-anbefaling (kun relevant før accept)
   const ai = useMemo(() => recommendBid(bids || []), [bids]);
@@ -82,8 +182,8 @@ export default function RequestBidsScreen() {
       if (a.accepted && !b.accepted) return -1;
       if (!a.accepted && b.accepted) return 1;
       // recommended next
-      if ((a.id === recommendedId) && (b.id !== recommendedId)) return -1;
-      if ((b.id === recommendedId) && (a.id !== recommendedId)) return 1;
+      if (a.id === recommendedId && b.id !== recommendedId) return -1;
+      if (b.id === recommendedId && a.id !== recommendedId) return 1;
       // price asc
       const ap = Number.isFinite(Number(a.price)) ? Number(a.price) : Number.POSITIVE_INFINITY;
       const bp = Number.isFinite(Number(b.price)) ? Number(b.price) : Number.POSITIVE_INFINITY;
@@ -116,7 +216,9 @@ export default function RequestBidsScreen() {
         // Hent job én gang (til header/status)
         const req = await getServiceRequest(jobId).catch(() => null);
         if (req) setJob(req);
-        if (req?.status && String(req.status).toLowerCase() !== "open") {
+
+        // Hvis job ikke er open, så er det “tildelt/igang/…” i praksis
+        if (req?.status && normalizeStatus(req.status) !== "open") {
           setRequestAssigned(true);
         }
 
@@ -144,7 +246,7 @@ export default function RequestBidsScreen() {
             );
             setBids(enriched);
             setRequestAssigned(enriched.some((b) => !!b.accepted));
-          } catch (e) {
+          } catch {
             setBids(list || []);
           } finally {
             setLoading(false);
@@ -181,7 +283,7 @@ export default function RequestBidsScreen() {
       Alert.alert("Allerede tildelt", "Opgaven har allerede et accepteret bud.");
       return;
     }
-    if (String(job?.status || "open").toLowerCase() !== "open") {
+    if (normalizeStatus(job?.status || "open") !== "open") {
       Alert.alert("Lukket opgave", "Denne opgave kan ikke længere tildeles.");
       return;
     }
@@ -190,7 +292,6 @@ export default function RequestBidsScreen() {
       setAccepting(true);
       await acceptBid(jobId, bid.id);
       setRequestAssigned(true);
-      // 👉 Efter accept: videre til “Igangværende”
       navigation.navigate("OwnerAssigned");
     } catch (e) {
       Alert.alert("Fejl", e?.message || "Kunne ikke acceptere bud.");
@@ -201,7 +302,7 @@ export default function RequestBidsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 350); // visuel feedback – live-lyt kører allerede
+    setTimeout(() => setRefreshing(false), 350);
   };
 
   if (loading) {
@@ -214,7 +315,7 @@ export default function RequestBidsScreen() {
   }
 
   const isNowAssigned = requestAssigned || !!acceptedBidId;
-  const statusText = String(job?.status || (isNowAssigned ? "assigned" : "open"));
+  const st = statusDisplay(job?.status || (isNowAssigned ? "assigned" : "open"));
 
   return (
     <ScrollView
@@ -228,22 +329,31 @@ export default function RequestBidsScreen() {
       {job ? (
         <View style={sx.jobCard}>
           <View style={sx.jobHeaderRow}>
-            <Text style={sx.jobType}>{(job.service_type || "Service request").toUpperCase()}</Text>
-            <View style={[sx.chip, sx[`chip_${statusText.toLowerCase()}`] || sx.chip_unknown]}>
-              <Text style={sx.chipText}>{statusText}</Text>
+            {/* ✅ Viser rigtige navn fra kataloget */}
+            <Text style={sx.jobType}>{serviceTitle(job)}</Text>
+
+            {/* ✅ Dansk label + samme chip-styleKey */}
+            <View style={[sx.chip, sx[`chip_${st.styleKey}`] || sx.chip_unknown]}>
+              <Text style={sx.chipText}>{st.label}</Text>
             </View>
           </View>
 
-          {!!job.description && <Text style={sx.jobDesc} numberOfLines={3}>{job.description}</Text>}
+          {!!job.description && (
+            <Text style={sx.jobDesc} numberOfLines={3}>
+              {job.description}
+            </Text>
+          )}
 
           <View style={sx.metaRow}>
             <Text style={sx.metaLabel}>Budget</Text>
             <Text style={sx.metaValue}>{DKK(job.budget)}</Text>
           </View>
+
           <View style={sx.metaRow}>
             <Text style={sx.metaLabel}>Deadline</Text>
             <Text style={sx.metaValue}>{deadlineLabel(job)}</Text>
           </View>
+
           {!!job?.location?.label && (
             <View style={sx.metaRow}>
               <Text style={sx.metaLabel}>Placering</Text>
@@ -286,7 +396,8 @@ export default function RequestBidsScreen() {
                   <Stars rating={b.provider.avgRating} />
                   {Number(b.provider.reviewCount) > 0 && (
                     <Text style={{ color: "#6B7280" }}>
-                      {b.provider.reviewCount} {Number(b.provider.reviewCount) === 1 ? "anmeldelse" : "anmeldelser"}
+                      {b.provider.reviewCount}{" "}
+                      {Number(b.provider.reviewCount) === 1 ? "anmeldelse" : "anmeldelser"}
                     </Text>
                   )}
                 </View>
