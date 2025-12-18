@@ -19,7 +19,6 @@ import {
   onSnapshot,
   query,
   orderBy,
-  updateDoc,
   setDoc,
   serverTimestamp,
   getDoc,
@@ -66,9 +65,24 @@ function Stars({ rating = 0, size = 14 }) {
   );
 }
 
-// Titelprioritet som i kalenderen
+// Titelprioritet som i kalenderen (service_name først)
 const pickTitle = (obj = {}) =>
-  obj.service_type || obj.title || obj.name || null;
+  obj.service_name ||
+  obj.serviceName ||
+  obj.service_type ||
+  obj.title ||
+  obj.name ||
+  null;
+
+function statusLabel(raw) {
+  const s = String(raw || "").toLowerCase();
+  if (s === "assigned") return "Tildelt";
+  if (s === "in_progress" || s === "in-progress") return "I gang";
+  if (s === "completed" || s === "done" || s === "closed") return "Afsluttet";
+  if (s === "paid") return "Betalt";
+  if (s === "reviewed") return "Afsluttet & anmeldt";
+  return "Ukendt";
+}
 
 export default function ProviderProfileScreen({ navigation }) {
   const uid = auth.currentUser?.uid;
@@ -87,49 +101,56 @@ export default function ProviderProfileScreen({ navigation }) {
   // Criipto (MitID) hook
   const { login: mitIdLogin, claims, error: mitIdError } = useCriiptoVerify();
 
-  // 1) Hent basis-profil + udbetalinger (engangs)
+  /* ---------- 1) Engangs: profil + payouts ---------- */
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
       if (!uid) return;
+
       try {
         const [profile, payoutsData] = await Promise.all([
           getProviderProfile(uid).catch(() => ({})),
           getProviderPayouts(uid).catch(() => []),
         ]);
-        if (!cancelled) {
-          setProv(profile || {});
-          const normalized = (payoutsData || [])
-            .map((p) => {
-              const amt = Number(p?.amount);
-              const amountDKK = Number.isFinite(amt) ? amt / 100 : 0;
-              return { ...p, amountDKK };
-            })
-            .sort(
-              (a, b) =>
-                (b?.createdAt?.toMillis?.() || 0) -
-                (a?.createdAt?.toMillis?.() || 0)
-            );
-          setPayouts(normalized);
-        }
+
+        if (cancelled) return;
+
+        setProv(profile || {});
+        const normalized = (payoutsData || [])
+          .map((p) => {
+            const amt = Number(p?.amount);
+            const amountDKK = Number.isFinite(amt) ? amt / 100 : 0; // Stripe minor -> DKK
+            return { ...p, amountDKK };
+          })
+          .sort(
+            (a, b) =>
+              (b?.createdAt?.toMillis?.() || 0) -
+              (a?.createdAt?.toMillis?.() || 0)
+          );
+
+        setPayouts(normalized);
       } catch (e) {
         if (!cancelled) setError(e?.message || String(e));
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
   }, [uid]);
 
-  // 2) Live: lyt til tildelte jobs
+  /* ---------- 2) Live: assigned_jobs ---------- */
   useEffect(() => {
     if (!uid) return;
+
     const qRef = query(
       collection(db, "providers", uid, "assigned_jobs"),
       orderBy("assigned_at", "desc")
     );
+
     const unsub = onSnapshot(
       qRef,
       (snap) => {
@@ -138,12 +159,14 @@ export default function ProviderProfileScreen({ navigation }) {
       },
       (e) => setError(e?.message || String(e))
     );
+
     return () => unsub();
   }, [uid]);
 
-  // 2b) Hent manglende titler fra service_requests
+  /* ---------- 2b) Hent manglende titler fra service_requests ---------- */
   useEffect(() => {
     let isCancelled = false;
+
     (async () => {
       const missing = assigned
         .map((j) => ({ j, id: j.job_id || j.id }))
@@ -153,6 +176,7 @@ export default function ProviderProfileScreen({ navigation }) {
           const hasCached = !!pickTitle(jobMeta[id] || {});
           return !hasLocal && !hasCached;
         });
+
       if (missing.length === 0) return;
 
       try {
@@ -166,34 +190,37 @@ export default function ProviderProfileScreen({ navigation }) {
           })
         );
 
-        if (!isCancelled) {
-          setJobMeta((prev) => {
-            const next = { ...prev };
-            for (const [id, meta] of pairs) next[id] = meta;
-            return next;
-          });
-        }
+        if (isCancelled) return;
+
+        setJobMeta((prev) => {
+          const next = { ...prev };
+          for (const [id, meta] of pairs) next[id] = meta;
+          return next;
+        });
       } catch (e) {
         console.log("Kunne ikke hente jobtitler:", e?.message || e);
       }
     })();
+
     return () => {
       isCancelled = true;
     };
   }, [assigned, jobMeta]);
 
-  // 3) Live: lyt til reviews
+  /* ---------- 3) Live: reviews ---------- */
   useEffect(() => {
     if (!uid) return;
+
     const unsub = listenProviderReviews(
       uid,
       (arr) => setReviews(arr || []),
       () => {}
     );
+
     return () => unsub?.();
   }, [uid]);
 
-  // Split på aktive / færdige + KPI’er
+  /* ---------- KPI’er ---------- */
   const { activeJobs, completedJobs, activeCount, completedCount, earnings } =
     useMemo(() => {
       const act = [];
@@ -215,6 +242,7 @@ export default function ProviderProfileScreen({ navigation }) {
           act.push(j);
         }
       }
+
       return {
         activeJobs: act,
         completedJobs: done,
@@ -236,12 +264,14 @@ export default function ProviderProfileScreen({ navigation }) {
     const valid = (reviews || []).filter(
       (r) => typeof r?.rating === "number" && !Number.isNaN(r.rating)
     );
+
     const count = valid.length;
     const avg = count
       ? Math.round(
           (valid.reduce((s, r) => s + Number(r.rating), 0) / count) * 10
         ) / 10
       : 0;
+
     return { avgFromReviews: avg, countFromReviews: count };
   }, [reviews]);
 
@@ -255,35 +285,13 @@ export default function ProviderProfileScreen({ navigation }) {
       ? prov.reviewCount
       : countFromReviews;
 
-  // Actions: opdatér jobstatus
-  async function setStatus(job, status) {
-    try {
-      const jobId = job.job_id || job.id;
-      if (!jobId) throw new Error("Mangler job-id");
-
-      await updateDoc(doc(db, "service_requests", jobId), {
-        status,
-        updated_at: serverTimestamp(),
-        ...(status === "in_progress" ? { startedAt: serverTimestamp() } : {}),
-        ...(status === "completed" ? { completedAt: serverTimestamp() } : {}),
-      });
-
-      await updateDoc(doc(db, "providers", uid, "assigned_jobs", jobId), {
-        status,
-        ...(status === "in_progress" ? { started_at: serverTimestamp() } : {}),
-        ...(status === "completed" ? { completed_at: serverTimestamp() } : {}),
-      });
-    } catch (e) {
-      Alert.alert("Fejl", e?.message || "Kunne ikke opdatere jobstatus.");
-    }
-  }
-
-  // MitID: Verificer-knap
+  /* ---------- MitID verify ---------- */
   async function handleMitIDVerify() {
     if (!uid) {
       Alert.alert("MitID", "Du skal være logget ind for at verificere.");
       return;
     }
+
     try {
       const redirectUri =
         Constants.appOwnership === "expo"
@@ -322,6 +330,7 @@ export default function ProviderProfileScreen({ navigation }) {
       setProv(latest || {});
     } catch (e) {
       const msg = String(e?.message || e);
+
       if (
         msg.includes("WebAuthenticationSession") ||
         msg.toLowerCase().includes("cancel")
@@ -343,7 +352,7 @@ export default function ProviderProfileScreen({ navigation }) {
     }
   }
 
-  // Log ud
+  /* ---------- Logout ---------- */
   const handleLogout = () => {
     Alert.alert(
       "Log ud",
@@ -366,6 +375,7 @@ export default function ProviderProfileScreen({ navigation }) {
     );
   };
 
+  /* ---------- Loading / error ---------- */
   if (loading) {
     return (
       <View style={styles.loader}>
@@ -384,7 +394,12 @@ export default function ProviderProfileScreen({ navigation }) {
   }
 
   const displayName =
-    prov?.displayName || prov?.companyName || auth.currentUser?.email || "Min profil";
+    prov?.displayName ||
+    prov?.companyName ||
+    auth.currentUser?.email ||
+    "Min profil";
+
+  const greet = auth.currentUser?.email || displayName;
 
   const MitIDBadge = () =>
     prov?.mitidVerified ? (
@@ -401,11 +416,7 @@ export default function ProviderProfileScreen({ navigation }) {
 
   const getDisplayTitle = (j) => {
     const id = j.job_id || j.id;
-    return (
-      pickTitle(j) ||
-      (id && pickTitle(jobMeta[id] || {})) ||
-      `Job #${id || "—"}`
-    );
+    return pickTitle(j) || (id && pickTitle(jobMeta[id] || {})) || `Job #${id || "—"}`;
   };
 
   /* Hjælp/links handlers */
@@ -414,71 +425,49 @@ export default function ProviderProfileScreen({ navigation }) {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      {/* Header */}
+      {/* Lille header */}
       <View style={styles.headerCard}>
-        <Text style={styles.welcome}>
-          Hej, {String(displayName).split(" ")[0]} 👋
-        </Text>
-        <Text style={styles.tagline}>Velkommen tilbage til HarborHub</Text>
+        <Text style={styles.welcome}>Hej, {String(greet)} 👋</Text>
       </View>
 
-      {/* Identitet / MitID */}
-      <View style={styles.identityCard}>
-        <View style={styles.identityRow}>
-          <Feather name="shield" size={20} color={COLORS.accent} />
-          <Text style={styles.identityTitle}>Identitet</Text>
-          <View style={styles.flex1} />
-          <MitIDBadge />
-        </View>
-
-        <Text style={styles.identityDesc}>
-          Bekræft din identitet med MitID og vis bådejerne, at du er troværdig.
-        </Text>
-
-        <TouchableOpacity
-          style={[styles.identityBtn, prov?.mitidVerified && styles.disabled]}
-          disabled={!!prov?.mitidVerified}
-          onPress={handleMitIDVerify}
-        >
-          <Text style={styles.identityBtnText}>
-            {prov?.mitidVerified ? "Allerede verificeret" : "Verificér med MitID"}
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={styles.identityHelp}>
-          Hvis du sidder fast på “Approved”, så vend tilbage til appen – den
-          fortsætter automatisk. I Expo Go skal callback-URL’en være whitelisted
-          i Criipto (General → Callback URLs).
-        </Text>
-
-        {mitIdError ? (
-          <Text style={styles.identityError}>MitID fejl: {String(mitIdError)}</Text>
-        ) : null}
-      </View>
-
-      {/* KPI’er */}
+      {/* KPI’er højt oppe */}
       <View style={styles.kpiGrid}>
         <View style={styles.kpiCard}>
           <Feather name="briefcase" size={18} color={COLORS.accent} />
           <Text style={styles.kpiValue}>{activeCount}</Text>
           <Text style={styles.kpiLabel}>Aktive jobs</Text>
         </View>
+
         <View style={styles.kpiCard}>
           <Feather name="check-circle" size={18} color={COLORS.good} />
           <Text style={styles.kpiValue}>{completedCount}</Text>
           <Text style={styles.kpiLabel}>Afsluttede</Text>
         </View>
+
         <View style={styles.kpiCard}>
           <Feather name="credit-card" size={18} color={COLORS.accent} />
           <Text style={styles.kpiValue}>{DKK(earnings)}</Text>
           <Text style={styles.kpiLabel}>Indtjening</Text>
         </View>
+
         <View style={styles.kpiCard}>
           <Feather name="arrow-down-circle" size={18} color={COLORS.accent} />
           <Text style={styles.kpiValue}>{DKK(payoutsTotal)}</Text>
           <Text style={styles.kpiLabel}>Udbetalt</Text>
         </View>
       </View>
+
+      {/* Stor kalender-knap */}
+      <TouchableOpacity
+        style={styles.bigActionBtn}
+        onPress={() => navigation.navigate("ProviderCalendar")}
+      >
+        <View style={styles.bigActionLeft}>
+          <Feather name="calendar" size={18} color={COLORS.accent} />
+          <Text style={styles.bigActionText}>Kalender</Text>
+        </View>
+        <Feather name="chevron-right" size={18} color={COLORS.muted} />
+      </TouchableOpacity>
 
       {/* Rating */}
       <View style={styles.card}>
@@ -491,34 +480,7 @@ export default function ProviderProfileScreen({ navigation }) {
         </Text>
       </View>
 
-      {/* Genveje */}
-      <View style={styles.quickRow}>
-        <TouchableOpacity
-          style={styles.quickButton}
-          onPress={() => navigation.navigate("AssignedJobs")}
-        >
-          <Feather name="clipboard" size={16} color={COLORS.accent} />
-          <Text style={styles.quickText}>Mine opgaver</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.quickButton}
-          onPress={() => navigation.navigate("ProviderCalendar")}
-        >
-          <Feather name="calendar" size={16} color={COLORS.accent} />
-          <Text style={styles.quickText}>Kalender</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.quickButton, styles.quickButtonDanger]}
-          onPress={handleLogout}
-        >
-          <Feather name="log-out" size={16} color={COLORS.danger} />
-          <Text style={[styles.quickText, styles.quickTextDanger]}>Log ud</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Færdige jobs – fold-ud */}
+      {/* Færdige jobs */}
       <Text style={styles.sectionTitle}>Færdige jobs</Text>
       <TouchableOpacity
         onPress={() => setShowCompleted((v) => !v)}
@@ -549,6 +511,8 @@ export default function ProviderProfileScreen({ navigation }) {
             renderItem={({ item }) => {
               const id = item.job_id || item.id;
               const title = getDisplayTitle(item);
+              const s = item.status || "completed";
+
               return (
                 <TouchableOpacity
                   style={styles.jobCard}
@@ -562,9 +526,7 @@ export default function ProviderProfileScreen({ navigation }) {
                       </Text>
                     ) : null}
                   </View>
-                  <Text style={styles.cardMeta}>
-                    Status: completed{ id ? ` · #${String(id).slice(0,6)}` : "" }
-                  </Text>
+                  <Text style={styles.cardMeta}>Status: {statusLabel(s)}</Text>
                 </TouchableOpacity>
               );
             }}
@@ -605,29 +567,74 @@ export default function ProviderProfileScreen({ navigation }) {
         </View>
       )}
 
+      {/* MitID rykket længere ned */}
+      <View style={styles.identityCard}>
+        <View style={styles.identityRow}>
+          <Feather name="shield" size={20} color={COLORS.accent} />
+          <Text style={styles.identityTitle}>Identitet</Text>
+          <View style={styles.flex1} />
+          <MitIDBadge />
+        </View>
+
+        <Text style={styles.identityDesc}>
+          Bekræft din identitet med MitID og vis bådejerne, at du er troværdig.
+        </Text>
+
+        <TouchableOpacity
+          style={[styles.identityBtn, prov?.mitidVerified && styles.disabled]}
+          disabled={!!prov?.mitidVerified}
+          onPress={handleMitIDVerify}
+        >
+          <Text style={styles.identityBtnText}>
+            {prov?.mitidVerified ? "Allerede verificeret" : "Verificér med MitID"}
+          </Text>
+        </TouchableOpacity>
+
+        {mitIdError ? (
+          <Text style={styles.identityError}>
+            MitID fejl: {String(mitIdError)}
+          </Text>
+        ) : null}
+      </View>
+
       {/* Hjælp & juridisk */}
       <View style={[styles.card, styles.cardSpacer]}>
         <Text style={styles.cardTitle}>Hjælp & juridisk</Text>
         <View style={styles.helpRow}>
-          <TouchableOpacity style={styles.helpBtn} onPress={() => openInBrowser(SUPPORT_URL)}>
+          <TouchableOpacity
+            style={styles.helpBtn}
+            onPress={() => openInBrowser(SUPPORT_URL)}
+          >
             <Text style={styles.helpBtnText}>Support</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.helpBtn} onPress={() => openInBrowser(PRIVACY_URL)}>
+          <TouchableOpacity
+            style={styles.helpBtn}
+            onPress={() => openInBrowser(PRIVACY_URL)}
+          >
             <Text style={styles.helpBtnText}>Privatliv</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.helpBtn} onPress={() => openInBrowser(TERMS_URL)}>
+          <TouchableOpacity
+            style={styles.helpBtn}
+            onPress={() => openInBrowser(TERMS_URL)}
+          >
             <Text style={styles.helpBtnText}>Vilkår</Text>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity onPress={emailSupport} style={styles.helpEmailLink}>
-          <Text style={styles.helpEmailText}>
-            Skriv til {SUPPORT_EMAIL}
-          </Text>
+          <Text style={styles.helpEmailText}>Skriv til {SUPPORT_EMAIL}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Faresone */}
+      {/* Stor log ud (lige over faresonen) */}
+      <View style={styles.logoutCard}>
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutGhost}>
+          <Feather name="log-out" size={18} color={COLORS.danger} />
+          <Text style={styles.logoutGhostText}>Log ud</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Faresone nederst */}
       <DeleteAccountSection style={styles.deleteSectionSpacing} />
     </ScrollView>
   );
