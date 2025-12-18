@@ -1,63 +1,63 @@
 # HarborHub — Innovation og ny teknologi (BA-BINTO1055U) 2025/2026
 
-HarborHub er en mobil applikation (tosidet platform), der forbinder **bådejere** og **mekanikere/værfter** gennem et samlet flow for **opgaveopslag → bud → sammenligning → booking → (betaling)**. Formålet er at reducere friktion, skabe gennemsigtighed og standardisere den ellers fragmenterede kommunikation i maritime serviceforløb.
+HarborHub er en mobil applikation (tosidet platform), der forbinder **bådejere** og **mekanikere/værfter** gennem et samlet flow for **opgaveopslag → bud → sammenligning → booking**. Formålet er at reducere friktion, skabe gennemsigtighed og standardisere den ellers fragmenterede kommunikation i maritime serviceforløb.
 
-## Links
-- GitHub: https://github.com/GustavDegn123/HarborHub  
-- YouTube-demo: https://www.youtube.com/watch?v=erPHoFVrvT0  
+## 🔗 Links
+- **GitHub Repository:** [GustavDegn123/HarborHub](https://github.com/GustavDegn123/HarborHub)
+- **YouTube Demo:** [Se præsentationen her](https://www.youtube.com/watch?v=erPHoFVrvT0)
 
 ---
 
-## Projektinfo
+## 👥 Projektgruppe & Vejledere
 
-### Navne og studienumre
-- Gustav Weirum Dalgaard — 169387  
-- Gustav Nikolai Degn — 168803  
-- Frederik Haxthausen Skotte — 168935  
+### Deltagere
+* **Gustav Weirum Dalgaard** — 169387
+* **Gustav Nikolai Degn** — 168803
+* **Frederik Haxthausen Skotte** — 168935
 
 ### Vejledere
-Lars Kaa Andersen, Jan Damsgaard, Sofie Jegind Christensen & Ida Husted Davidsen  
+Lars Kaa Andersen, Jan Damsgaard, Sofie Jegind Christensen & Ida Husted Davidsen
 
 ### Eksamen
 Mundtlig prøve på baggrund af skriftligt produkt (gruppeopgave + individuel mundtlig præstation).
 
 ---
 
-## Kerneidé og brugerflow
+## ⚓ Kerneidé og Brugerflow
 
-### Roller
-- **Bådejer (Demand-side):** Opretter serviceopgave, vedhæfter billeder, angiver lokation, modtager bud og vælger/booker.
-- **Mekaniker/Værft (Supply-side):** Ser relevante opgaver, filtrerer og afgiver bud.
+Platformen understøtter to primære brugerroller:
+
+* **Bådejer (Demand-side):** Kan oprette serviceopgaver med beskrivelse, billeder og lokation. Ejeren modtager efterfølgende bud fra verificerede udbydere og kan vælge/booke direkte i appen.
+* **Mekaniker/Værft (Supply-side):** Kan gennemse relevante opgaver i nærheden via filtrering og afgive konkurrencedygtige bud på opgaverne.
 
 ---
 
-## Sådan kører du projektet lokalt
+## 🚀 Sådan kører du projektet lokalt
 
-### 1) Forudsætninger
-- Node.js
-- Git
-- **Expo Go** (på telefon) og/eller:
-  - Xcode (iOS) til iOS Simulator
-  - Android Studio (Android) til emulator
+### 1. Forudsætninger
+Før du starter, skal du have følgende installeret:
+- [Node.js](https://nodejs.org/)
+- [Git](https://git-scm.com/)
+- **Expo Go** appen på din smartphone og/eller:
+  - **Xcode** (til iOS Simulator)
+  - **Android Studio** (til Android Emulator)
 
-### 2) Installation
+### 2. Installation
+Klon repositoryet og installer de nødvendige dependencies:
+
 ```bash
-git clone https://github.com/GustavDegn123/HarborHub
+# Klon projektet
+git clone [https://github.com/GustavDegn123/HarborHub](https://github.com/GustavDegn123/HarborHub)
+
+# Gå ind i mappen
 cd HarborHub
+
+# Installer pakker
 npm install
-3) Kør appen (Expo)
-bash
-Kopier kode
-npm start
-Scan QR-koden med Expo Go (Android) / Kamera (iOS), eller kør på simulator.
 
-4) Konfiguration (.env)
-Opret en .env (eller tilsvarende) i roden af projektet.
+3. Konfiguration (.env)
+Projektet kræver opsætning af miljøvariabler for at fungere med eksterne tjenester (Firebase, Stripe, Criipto). Opret en fil i rodmappen med navnet .env og indsæt følgende nøgler:
 
-Eksempel:
-
-env
-Kopier kode
 EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 EXPO_PUBLIC_CRIIPTO_DOMAIN=
 EXPO_PUBLIC_CRIIPTO_CLIENT_ID=
@@ -71,3 +71,8 @@ EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=
 EXPO_PUBLIC_SENTRY_DSN=
 EXPO_PUBLIC_SENTRY_ENV=
 
+4. Start appen
+Når installationen og konfigurationen er på plads, kan du starte Expo:
+npm start
+Android: Scan QR-koden i terminalen med Expo Go appen.
+iOS: Scan QR-koden med dit kamera eller tryk i i terminalen for at åbne simulatoren.
