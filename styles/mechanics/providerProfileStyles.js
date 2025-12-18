@@ -222,7 +222,6 @@ export default StyleSheet.create({
     fontSize: 13,
   },
 
-  /* ---------- Stars ---------- */
   starText14: {
     color: COLORS.star,
     fontWeight: "700",
@@ -236,7 +235,6 @@ export default StyleSheet.create({
     fontFamily: FONT_FAMILY,
   },
 
-  /* ---------- Quick actions ---------- */
   quickRow: {
     flexDirection: "row",
     gap: 10,
@@ -268,7 +266,6 @@ export default StyleSheet.create({
     color: COLORS.danger,
   },
 
-  /* ---------- Expand list ---------- */
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",

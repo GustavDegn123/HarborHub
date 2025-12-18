@@ -99,7 +99,7 @@ export default function OwnerAssignedScreen() {
   // service id -> name map
   const [serviceNameById, setServiceNameById] = useState({});
 
-  // Hent service-katalog (til visning af navn i stedet for ID)
+  // Hent service-katalog fra FB
   useEffect(() => {
     let alive = true;
     (async () => {

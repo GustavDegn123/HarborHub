@@ -83,7 +83,6 @@ export default StyleSheet.create({
   altLinkBtn: { alignItems: "center", marginTop: 12 },
   altLinkText: { color: colors.primary, fontWeight: "600" },
 
-  /* ---------- Formular ---------- */
   screen: { flex: 1, backgroundColor: colors.bg },
   container: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
 

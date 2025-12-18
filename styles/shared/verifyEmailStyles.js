@@ -3,14 +3,14 @@ import { StyleSheet } from "react-native";
 
 const COLORS = {
   bg: "#FFFFFF",
-  text: "#0F172A",         // slate-900
-  subtext: "#475569",      // slate-600
+  text: "#0F172A",         
+  subtext: "#475569",      
   primary: "#0B6EEF",
   primaryText: "#FFFFFF",
-  border: "#E2E8F0",       // slate-200
+  border: "#E2E8F0",      
   danger: "#E11D48",
-  muted: "#94A3B8",        // slate-400
-  card: "#F8FAFC",         // slate-50
+  muted: "#94A3B8",        
+  card: "#F8FAFC",        
 };
 
 export default StyleSheet.create({
@@ -67,7 +67,6 @@ export default StyleSheet.create({
     textAlign: "center",
   },
 
-  /* Actions */
   actions: {
     gap: 12,
     marginBottom: 28,
@@ -118,7 +117,6 @@ export default StyleSheet.create({
     opacity: 0.6,
   },
 
-  /* Loading overlay */
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(255,255,255,0.6)",

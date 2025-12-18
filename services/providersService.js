@@ -67,14 +67,6 @@ export async function saveProviderServices(userId, servicesArray) {
 /* =========================
    Service-katalog
 ========================= */
-
-/**
- * Hent alle services (katalog).
- * Prioritet:
- * 1) Firestore: meta/service_catalog (hierarkisk, forventer {id,name,children[]})
- * 2) Firestore: collection("services") (flad: {id,name}) -> returneres som top-level leaves
- * 3) Lokal fallback: SERVICE_CATALOG
- */
 export async function getAvailableServices() {
   // 1) meta/service_catalog (foretrukken)
   try {
@@ -131,11 +123,6 @@ export function mapLegacyServiceToLeaves(legacy) {
   return map[key] || [];
 }
 
-/**
- * Bruges evt. i feed-filter:
- * Tjek om en providers valgte leaf-ids "matcher" en opgave,
- * der kan have enten service_type (gammelt) eller services[] (nyt).
- */
 export function providerMatchesRequest(providerLeafIds, request) {
   if (!Array.isArray(providerLeafIds) || providerLeafIds.length === 0) return true;
 
@@ -200,7 +187,6 @@ export function listenProviderJobs(uid, callback, errorCallback) {
 /* =========================
    Payouts (udbetalinger)
 ========================= */
-
 /** Engangslæsning */
 export async function getProviderPayouts(uid, max = 50) {
   if (!uid) return [];

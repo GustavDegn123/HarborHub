@@ -2,11 +2,9 @@
 
 const USE_LIVE = false;
 
-// Firebase Cloud Function URLs
 const CLOUD_BASE_TEST =
-  "https://createpaymentintent-2i2muudrxq-uc.a.run.app"; // TEST
-const CLOUD_BASE_LIVE =
-  "https://createpaymentintent-live-xyz.a.run.app"; // sæt din LIVE URL ind senere
+  "https://createpaymentintent-2i2muudrxq-uc.a.run.app";
+  "https://createpaymentintent-live-xyz.a.run.app"; 
 
 const CLOUD_BASE = USE_LIVE ? CLOUD_BASE_LIVE : CLOUD_BASE_TEST;
 
@@ -36,7 +34,7 @@ export async function createPaymentIntentForJob({
       throw new Error(`Serverfejl (${res.status}): ${text}`);
     }
 
-    return await res.json(); // { clientSecret, id }
+    return await res.json();
   } catch (err) {
     console.error("createPaymentIntentForJob fejl:", err);
     throw err;

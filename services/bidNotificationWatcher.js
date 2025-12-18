@@ -19,15 +19,6 @@ const DKK = (n) =>
       }).format(Number(n))
     : "—";
 
-/**
- * Watch bids for a list of jobIds.
- * Returns a function that stops all listeners.
- *
- * Strategy:
- *  - For hvert job: læs seneste bud (limit(1), orderBy(created_at, "desc")).
- *  - Første snapshot for et job bruges kun til baseline (ingen notifikation).
- *  - Senere, hvis der dukker et nyere bud op end baseline -> lokal notifikation.
- */
 export function watchBidsForJobs(jobIds) {
   // ryd op ved tom liste
   if (!Array.isArray(jobIds) || jobIds.length === 0) {

@@ -22,7 +22,6 @@ import { recommendBid } from "../../utils/recommendation";
 import styles, { sx } from "../../styles/boatowners/requestBidsStyles";
 import { auth, db } from "../../firebase";
 
-/* ---------- utils ---------- */
 const DKK = (n) =>
   Number.isFinite(Number(n))
     ? new Intl.NumberFormat("da-DK", {
@@ -170,7 +169,7 @@ export default function RequestBidsScreen() {
     [bids]
   );
 
-  // AI-anbefaling (kun relevant før accept)
+  // "AI"-anbefaling (kun relevant før accept)
   const ai = useMemo(() => recommendBid(bids || []), [bids]);
   const recommendedId = ai?.bestId;
 
@@ -178,17 +177,13 @@ export default function RequestBidsScreen() {
   const sortedBids = useMemo(() => {
     const arr = [...bids];
     arr.sort((a, b) => {
-      // accepted first
       if (a.accepted && !b.accepted) return -1;
       if (!a.accepted && b.accepted) return 1;
-      // recommended next
       if (a.id === recommendedId && b.id !== recommendedId) return -1;
       if (b.id === recommendedId && a.id !== recommendedId) return 1;
-      // price asc
       const ap = Number.isFinite(Number(a.price)) ? Number(a.price) : Number.POSITIVE_INFINITY;
       const bp = Number.isFinite(Number(b.price)) ? Number(b.price) : Number.POSITIVE_INFINITY;
       if (ap !== bp) return ap - bp;
-      // newest first
       return toMs(b.created_at) - toMs(a.created_at);
     });
     return arr;

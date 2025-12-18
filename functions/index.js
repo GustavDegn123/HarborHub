@@ -31,7 +31,7 @@ function allowCORS(req, res) {
 exports.deleteUserData = require("./deleteUserData").deleteUserData;
 
 /**
- * 👉 Create PaymentIntent til et job
+ * Create PaymentIntent til et job
  */
 exports.createPaymentIntent = onRequest(
   { region: "us-central1", secrets: [STRIPE_SECRET_KEY] },
@@ -85,7 +85,7 @@ exports.createPaymentIntent = onRequest(
 );
 
 /**
- * 👉 Stripe webhook (sætter job → paid, opretter payouts osv.)
+ * Stripe webhook (sætter job → paid, opretter payouts osv.)
  */
 exports.stripeWebhook = onRequest(
   { region: "us-central1", secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET] },
@@ -218,9 +218,6 @@ exports.stripeWebhook = onRequest(
     }
   }
 );
-
-// functions/index.js (uddrag)
-// const OPENAI_API_KEY_LITERAL = "sk-...DIN_OPENAI_NØGLE..."; // kun på serveren
 
 exports.chat = onRequest(
   { region: "us-central1", cors: ["*"], secrets: [OPENAI_API_KEY] },

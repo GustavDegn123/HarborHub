@@ -55,7 +55,7 @@ export default function JobDetailScreen() {
   const navigation = useNavigation();
   const user = auth.currentUser;
   const jobId = route?.params?.jobId;
-  const navViewAs = route?.params?.viewAs; // "owner" | "provider" (valgfri override)
+  const navViewAs = route?.params?.viewAs;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

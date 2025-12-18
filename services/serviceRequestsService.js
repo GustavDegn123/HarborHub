@@ -24,9 +24,6 @@ function withId(docSnap) {
   return { id: docSnap.id, ...docSnap.data() };
 }
 
-/* =========================
-   CREATE
-========================= */
 
 /** Opret en ny service request
  *  - Gemmer hele payload (fx image, deadlineType, specificTime)
@@ -203,7 +200,6 @@ export async function acceptBid(jobId, bidId) {
     accepted: true,
   });
 
-  // 4) (Valgfrit men nyttigt) Opret reference under provider → assigned_jobs/{jobId}
   //    Så det er nemt at vise på mekanikerens profil / “Mine opgaver”
   if (providerId) {
     const assignedRef = doc(db, "providers", providerId, "assigned_jobs", jobId);
@@ -239,7 +235,6 @@ export async function getAssignedJobsForProvider(providerId) {
   }
   return rows;
 }
-// (Valgfrit) Live-lyt på tildelte jobs
 export function listenAssignedJobs(providerId, callback, errorCallback) {
   if (!providerId) return () => {};
   const assignedRef = collection(db, "providers", providerId, "assigned_jobs");

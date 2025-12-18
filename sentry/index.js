@@ -1,12 +1,10 @@
 // /sentry/index.js
-// Robust, lazy Sentry loader. If Sentry can't load, we fall back to no-ops
-// so the app never crashes during startup.
-
+// Robust, lazy Sentry loader.
 function fakeSentry() {
   const noop = () => {};
   return {
     init: noop,
-    captureException: console.error, // still log to console in dev
+    captureException: console.error,
     captureMessage: console.log,
     setTag: noop,
     Native: {
@@ -20,10 +18,7 @@ function fakeSentry() {
 let Sentry = fakeSentry();
 
 try {
-  // Delay the require so if the package has an issue, we can catch it.
   const mod = require("sentry-expo");
-  // sentry-expo exports both CJS and ESM in various toolchains;
-  // normalize to the actual object.
   const S = mod?.default ?? mod;
 
   const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;

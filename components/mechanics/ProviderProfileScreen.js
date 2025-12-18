@@ -626,7 +626,7 @@ export default function ProviderProfileScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Stor log ud (lige over faresonen) */}
+      {/* Log ud */}
       <View style={styles.logoutCard}>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutGhost}>
           <Feather name="log-out" size={18} color={COLORS.danger} />

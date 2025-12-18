@@ -87,7 +87,6 @@ export default function NewRequestScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  /* Init: boats + services */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -116,7 +115,7 @@ export default function NewRequestScreen({ navigation, route }) {
     };
   }, []); // kun mount
 
-  /* Refresh boats når man kommer tilbage (fx efter BoatForm) */
+  /* Refresh boats når man kommer tilbage (efter BoatForm) */
   useFocusEffect(
     useCallback(() => {
       let alive = true;
@@ -202,13 +201,13 @@ export default function NewRequestScreen({ navigation, route }) {
     navigation.navigate("MapPicker", { start, returnTo: "NewRequest" });
   }, [navigation, picked]);
 
-  /* Date */
+  /* Dato */
   const onChangeDate = (event, selectedDate) => {
     if (selectedDate) setDate(selectedDate);
     if (Platform.OS !== "ios") setShowDatePicker(false);
   };
 
-  /* Images */
+  /* Billeder */
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,

@@ -27,9 +27,6 @@ import { getProviderPublicSummary } from "./providersService";
 
 const withId = (d) => ({ id: d.id, ...d.data() });
 
-/* =========================
-   CREATE
-========================= */
 
 /** Opret en ny service request */
 export async function addRequest(ownerId, boatId, data) {
@@ -121,11 +118,6 @@ export async function updateServiceRequest(id, data) {
   });
 }
 
-/**
- * Marker en service request som BETALT (klientside efter vellykket Stripe-betaling).
- * amountMinor = beløb i øre (valgfri, kun til log/visning).
- * NB: Webhooken må også gerne sætte paid=true → ingen konflikt.
- */
 export async function markRequestPaid(jobId, amountMinor) {
   if (!jobId) return;
   const ref = doc(db, "service_requests", jobId);
@@ -358,9 +350,6 @@ export async function getAssignedJobsForProvider(providerId, max = 100) {
   return snap.docs.map(withId);
 }
 
-/* ======================================================================
-   NYE FUNKTIONER – lyttere/filtre
-====================================================================== */
 
 export function listenOwnerRequestsWithBids(
   ownerId,
@@ -521,10 +510,6 @@ export function listenOwnerRequests(ownerId, callback) {
   return onSnapshot(qRef, (snap) => callback(snap.docs.map(withId)));
 }
 
-/**
- * Fleksibel lytter: vælg hvilke statuser der er “actionable” for ejer.
- * (NB: where("status","in",statuses) kan kræve Firestore-index)
- */
 export function listenOwnerRequestsByStatus(ownerId, statuses, callback) {
   if (!ownerId || !Array.isArray(statuses) || statuses.length === 0)
     return () => {};
@@ -565,10 +550,6 @@ export function listenAssignedJobsForProvider(
     (err) => errorCallback?.(err)
   );
 }
-
-/* =========================
-   SAFE listener (ingen index-krav)
-========================= */
 
 /** Safe live-lyt til ejerens requests uden orderBy (kræver intet index) */
 export function listenOwnerRequestsSafe(ownerId, callback, errorCallback) {

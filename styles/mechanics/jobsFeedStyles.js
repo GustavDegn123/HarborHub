@@ -95,7 +95,6 @@ export default StyleSheet.create({
   mapWrap: { flex: 1, margin: 16, borderRadius: 16, overflow: "hidden" },
   map: { flex: 1 },
 
-  /* Empty / loading */
   loader: {
     flex: 1,
     alignItems: "center",

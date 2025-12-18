@@ -20,7 +20,6 @@ function allowCORS(req, res) {
 
 async function deleteQueryBatch(query, batchSize = 300) {
   let total = 0;
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const snap = await query.limit(batchSize).get();
     if (snap.empty) break;
@@ -38,7 +37,6 @@ async function deleteStoragePrefix(prefix) {
     await bucket.deleteFiles({ prefix });
     return { ok: true };
   } catch (e) {
-    // Retention / object hold / precondition osv. — vi logger, men lader sletning fortsætte
     const msg = e?.message || String(e);
     logger.warn(`Storage delete failed for prefix "${prefix}": ${msg}`);
     return { ok: false, error: msg };
@@ -146,7 +144,6 @@ exports.deleteUserData = onRequest(async (req, res) => {
       progress.warnings.push(`Kunne ikke slette profil-docs: ${msg}`);
     }
 
-    // 7) Storage – best-effort; ignorer retention-fejl
     progress.storage.profiles = await deleteStoragePrefix(`profiles/${uid}/`);
     progress.storage.userUploads = await deleteStoragePrefix(`userUploads/${uid}/`);
     for (const jobId of jobIds) {

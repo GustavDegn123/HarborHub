@@ -33,10 +33,7 @@ export async function askNotificationPermission() {
   return status === "granted";
 }
 
-/**
- * Lokal test: send evt. med et jobId, så tap åbner den rigtige skærm.
- * Brug: scheduleLocalTest("ABC123")
- */
+
 export async function scheduleLocalTest(jobId) {
   const ok = await askNotificationPermission();
   if (!ok) return Alert.alert("Tilladelse påkrævet", "Giv appen lov til notifikationer.");

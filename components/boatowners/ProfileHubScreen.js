@@ -150,7 +150,6 @@ export default function ProfileHubScreen({ navigation }) {
           // Opdatér auth-profil (så det også er “rigtigt” efter genstart/login)
           await updateProfile(auth.currentUser, { photoURL: bust });
 
-          // ✅ Opdatér UI-state til endelig URL (ikke kun local file://)
           setPhotoURL(bust);
 
           Alert.alert("Profilbillede opdateret", "Dit profilbillede er gemt.");
@@ -220,7 +219,6 @@ export default function ProfileHubScreen({ navigation }) {
             ]}
           >
             {photoURL ? (
-              // ✅ key tvinger remount når URL ændrer sig (løser caching/stale rendering)
               <Image key={photoURL} source={{ uri: photoURL }} style={styles.avatarImg} />
             ) : (
               <Text style={styles.avatarInitials}>{initials}</Text>

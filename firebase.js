@@ -30,7 +30,6 @@ if (!firebaseConfig.apiKey) {
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Ensure persistence on RN: try initializeAuth first, fall back to getAuth if already initialized
 let auth;
 try {
   auth = initializeAuth(app, {

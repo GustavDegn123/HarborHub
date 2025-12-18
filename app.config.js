@@ -2,7 +2,6 @@
 require("dotenv").config();
 
 module.exports = {
-  // ---- App identity & basics ----
   name: "HarborHub",
   slug: "harborhub",
   scheme: "harborhub",
@@ -18,7 +17,6 @@ module.exports = {
   },
   assetBundlePatterns: ["**/*"],
 
-  // ---- iOS ----
   ios: {
     bundleIdentifier: "com.gustavdegn.harborhub",
     buildNumber: "1.0.0",
@@ -31,7 +29,6 @@ module.exports = {
     },
   },
 
-  // ---- Android ----
   android: {
     package: "com.gustavdegn.harborhub",
     versionCode: 1,
@@ -46,49 +43,39 @@ module.exports = {
     },
   },
 
-  // ---- Notifications (app icon color etc.) ----
   notification: {
     icon: "./assets/logo.png",
     color: "#0B6EEF",
   },
 
-  // ---- Web (if/when you use it) ----
   web: {
     favicon: "./assets/logo.png",
   },
 
-  // ---- Plugins ----
   plugins: [
     "expo-notifications",
     [
       "@criipto/verify-expo",
       {
-        androidAppLinks: [], // add if/when you configure Android App Links
+        androidAppLinks: [], 
       },
     ],
-    // Sentry for Expo/React Native — sourcemaps upload via EAS builds
     [
       "sentry-expo",
       {
-        // These can be set as EAS Secrets; leaving undefined is fine locally.
         organization: process.env.SENTRY_ORG,
         project: process.env.SENTRY_PROJECT || "harborhub",
-        // auth token picked up from env: SENTRY_AUTH_TOKEN (set as EAS secret)
       },
     ],
   ],
 
-  // ---- Public runtime config (read via process.env.EXPO_PUBLIC_* in app code) ----
   extra: {
-    // Stripe (Publishable key only — safe to be public, but don’t hardcode in git)
     EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY:
       process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
 
-    // Criipto (MitID)
     EXPO_PUBLIC_CRIIPTO_DOMAIN: process.env.EXPO_PUBLIC_CRIIPTO_DOMAIN,
     EXPO_PUBLIC_CRIIPTO_CLIENT_ID: process.env.EXPO_PUBLIC_CRIIPTO_CLIENT_ID,
 
-    // Firebase (web client config — not secret, still don’t hardcode in git)
     EXPO_PUBLIC_FIREBASE_API_KEY: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
     EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN:
       process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -102,26 +89,10 @@ module.exports = {
     EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID:
       process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 
-    // Google OAuth client IDs (optional)
-    EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID:
-      process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
-    EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID:
-      process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID:
-      process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID:
-      process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-
-    // Facebook (public app id for expo-auth-session)
-    EXPO_PUBLIC_FACEBOOK_APP_ID:
-      process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || "1214898343801009",
-
-    // Sentry (public DSN and optional env)
     EXPO_PUBLIC_SENTRY_DSN: process.env.EXPO_PUBLIC_SENTRY_DSN,
     EXPO_PUBLIC_SENTRY_ENV:
       process.env.EXPO_PUBLIC_SENTRY_ENV || (process.env.NODE_ENV === "production" ? "production" : "development"),
 
-    // EAS Project
     eas: {
       projectId: "02ce5b94-a91d-415e-9f67-20d7006f114c",
     },

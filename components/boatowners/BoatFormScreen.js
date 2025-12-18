@@ -47,8 +47,6 @@ export default function BoatFormScreen({ navigation }) {
     if (!ownerId) return;
 
     if (!name.trim()) {
-      // Lille UX: kræv navn så brugeren forstår den er gemt “rigtigt”
-      // (kan fjernes hvis I vil)
       return;
     }
 
@@ -72,7 +70,6 @@ export default function BoatFormScreen({ navigation }) {
     } catch (e) {
       console.error("Fejl ved oprettelse af båd:", e);
       // Vi bruger stadig native her ved fejl (det er fint)
-      // Hvis du vil, kan vi style en “error modal” også.
       alert(e?.message || "Kunne ikke gemme båden. Prøv igen.");
     } finally {
       setSaving(false);

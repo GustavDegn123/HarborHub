@@ -16,8 +16,6 @@ import styles, { colors as chatColors } from "../../styles/boatowners/chatBotSty
 
 // Prod cloud function (brug dit projekt-id fra app.options)
 const CHAT_ENDPOINT = `https://us-central1-${app.options.projectId}.cloudfunctions.net/chat`;
-// Til emulator på iOS-simulator:
-// const CHAT_ENDPOINT = `http://127.0.0.1:5001/${app.options.projectId}/us-central1/chat`;
 
 export default function ChatBotScreen() {
   const [messages, setMessages] = useState([

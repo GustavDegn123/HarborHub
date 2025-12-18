@@ -18,7 +18,6 @@ import { getAuth } from "firebase/auth";
 import styles from "../../styles/mechanics/chooseWorkStyles";
 import { getAvailableServices, saveProviderServices } from "../../services/providersService";
 
-// (Android needs this to animate accordion open/close)
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -71,12 +70,6 @@ function norm(s) {
   return String(s || "").trim().toLowerCase();
 }
 
-/**
- * Filtrér kataloget på søgning:
- * - matcher kategori -> behold hele kategorien
- * - matcher subkategori -> behold kun den subkategori (evt. filtreret)
- * - matcher leaf -> behold leaf
- */
 function filterCatalog(catalog, query) {
   const q = norm(query);
   if (!q) return Array.isArray(catalog) ? catalog : [];
@@ -114,10 +107,6 @@ function filterCatalog(catalog, query) {
     .filter(Boolean);
 }
 
-/**
- * Hvis du modtager et “fladt” katalog (fx [{id,name}, ...] uden children),
- * så wrap det i en kategori så UI stadig virker.
- */
 function normalizeCatalogShape(data) {
   if (!Array.isArray(data)) return [];
 
