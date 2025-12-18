@@ -37,9 +37,9 @@ async function ensureSubProfile(uid, role) {
 }
 
 /**
- * Opret bruger
+ * Opret bruger (uden location)
  */
-export async function signUpUser(email, password, name, role, phone, location) {
+export async function signUpUser(email, password, name, role, phone) {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   const user = cred.user;
 
@@ -49,7 +49,6 @@ export async function signUpUser(email, password, name, role, phone, location) {
     email,
     phone: phone || null,
     role,
-    location: location || null,
     created_at: serverTimestamp(),
     updated_at: serverTimestamp(),
   };

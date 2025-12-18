@@ -21,14 +21,13 @@ export default function SignUpScreen({ navigation }) {
   const [name, setName] = useState("");
   const [role, setRole] = useState("owner"); // default = owner
   const [phone, setPhone] = useState("");
-  const [location, setLocation] = useState("");
   const [loading, setLoading] = useState(false);
 
   const validate = () => {
     if (!name.trim()) return "Skriv dit navn.";
     if (!email.trim()) return "Skriv din e-mail.";
-    // meget enkel e-mail tjek
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) return "Ugyldig e-mail.";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()))
+      return "Ugyldig e-mail.";
     if (password.length < 6) return "Adgangskoden skal være mindst 6 tegn.";
     return null;
   };
@@ -43,25 +42,22 @@ export default function SignUpScreen({ navigation }) {
     try {
       setLoading(true);
 
-      // Opret bruger + opret brugerprofil/rolle i Firestore (din service gør dette)
-      const user = await signUpUser(
+      // Opret bruger + profil i Firestore
+      await signUpUser(
         email.trim(),
         password,
         name.trim(),
         role,
-        phone.trim(),
-        location.trim()
+        phone.trim()
       );
 
-      // Send e-mail-verifikation hvis det er en password-bruger
-      // (Hvis din authService allerede sender, gør dette ikke skade – den anden vil fejle “already sent”/rate-limit,
-      // og vi ignorerer bare den fejl.)
+      // Send e-mail-verifikation
       try {
         if (auth.currentUser) {
           await sendEmailVerification(auth.currentUser);
         }
       } catch (_) {
-        // Ignorér — fx hvis service allerede har sendt verifikationsmail
+        // Ignorér — fx hvis der allerede er sendt / rate-limit
       }
 
       Alert.alert(
@@ -73,8 +69,7 @@ export default function SignUpScreen({ navigation }) {
     } catch (error) {
       console.error("SignUp Error:", error);
       const msg =
-        error?.message ||
-        "Der opstod en fejl under oprettelse. Prøv igen.";
+        error?.message || "Der opstod en fejl under oprettelse. Prøv igen.";
       Alert.alert("Fejl", msg);
     } finally {
       setLoading(false);
@@ -90,6 +85,7 @@ export default function SignUpScreen({ navigation }) {
         placeholder="Fulde navn"
         value={name}
         onChangeText={setName}
+        editable={!loading}
       />
 
       <TextInput
@@ -101,6 +97,7 @@ export default function SignUpScreen({ navigation }) {
         autoCapitalize="none"
         autoCorrect={false}
         textContentType="emailAddress"
+        editable={!loading}
       />
 
       <TextInput
@@ -110,6 +107,7 @@ export default function SignUpScreen({ navigation }) {
         onChangeText={setPassword}
         secureTextEntry
         textContentType="newPassword"
+        editable={!loading}
       />
 
       <TextInput
@@ -119,13 +117,7 @@ export default function SignUpScreen({ navigation }) {
         onChangeText={setPhone}
         keyboardType="phone-pad"
         textContentType="telephoneNumber"
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Lokation"
-        value={location}
-        onChangeText={setLocation}
+        editable={!loading}
       />
 
       {/* Role Selection */}
@@ -134,6 +126,7 @@ export default function SignUpScreen({ navigation }) {
         <TouchableOpacity
           style={[styles.roleButton, role === "owner" && styles.roleButtonActive]}
           onPress={() => setRole("owner")}
+          disabled={loading}
         >
           <Text style={[styles.roleText, role === "owner" && styles.roleTextActive]}>
             Bådejer
@@ -141,8 +134,12 @@ export default function SignUpScreen({ navigation }) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.roleButton, role === "provider" && styles.roleButtonActive]}
+          style={[
+            styles.roleButton,
+            role === "provider" && styles.roleButtonActive,
+          ]}
           onPress={() => setRole("provider")}
+          disabled={loading}
         >
           <Text
             style={[
@@ -150,7 +147,7 @@ export default function SignUpScreen({ navigation }) {
               role === "provider" && styles.roleTextActive,
             ]}
           >
-            Udbyder / Mekaniker
+            Mekaniker
           </Text>
         </TouchableOpacity>
       </View>
@@ -160,15 +157,11 @@ export default function SignUpScreen({ navigation }) {
         onPress={handleSignUp}
         disabled={loading}
       >
-        {loading ? (
-          <ActivityIndicator />
-        ) : (
-          <Text style={styles.buttonText}>Opret konto</Text>
-        )}
+        {loading ? <ActivityIndicator /> : <Text style={styles.buttonText}>Opret konto</Text>}
       </TouchableOpacity>
 
       {/* Link til login for eksisterende brugere */}
-      <TouchableOpacity onPress={() => navigation.navigate("LoginScreen")}>
+      <TouchableOpacity onPress={() => navigation.navigate("LoginScreen")} disabled={loading}>
         <Text style={styles.link}>Har du allerede en konto? Log ind</Text>
       </TouchableOpacity>
     </View>

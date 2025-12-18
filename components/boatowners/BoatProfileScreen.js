@@ -13,7 +13,13 @@ export default function BoatProfileScreen() {
         const user = getCurrentUser();
         if (!user) return setLoading(false);
 
-        let data = { email: user.email, uid: user.uid, displayName: user.displayName, phoneNumber: user.phoneNumber };
+        let data = {
+          email: user.email,
+          uid: user.uid,
+          displayName: user.displayName,
+          phoneNumber: user.phoneNumber,
+        };
+
         const extra = await getUserData(user.uid);
         if (extra) data = { ...data, ...extra };
 
@@ -33,6 +39,7 @@ export default function BoatProfileScreen() {
       </View>
     );
   }
+
   if (!userData) {
     return (
       <View style={styles.center}>
@@ -41,31 +48,15 @@ export default function BoatProfileScreen() {
     );
   }
 
-  // Udtræk kun de felter vi vil vise
   const email = userData.email || "-";
   const phone = userData.phone || userData.phoneNumber || "-";
-  const name =
-    userData.name ||
-    userData.fullName ||
-    userData.displayName ||
-    "-";
-
-  // By kan komme i flere formater: string, objekt med city, eller nested
-  const city =
-    typeof userData.location === "string"
-      ? userData.location
-      : userData.location?.city ||
-        userData.location?.by ||
-        userData.location?.town ||
-        userData.location?.name ||
-        "-";
+  const name = userData.name || userData.fullName || userData.displayName || "-";
 
   const rows = [
     { label: "Navn", value: name },
     { label: "Email", value: email },
     { label: "Telefon", value: phone },
-    { label: "By", value: city },
-  ].filter(r => r.value && r.value !== "-");
+  ].filter((r) => r.value && r.value !== "-");
 
   return (
     <ScrollView style={styles.container}>
@@ -73,7 +64,10 @@ export default function BoatProfileScreen() {
 
       <View style={styles.card}>
         {rows.map((r, idx) => (
-          <View key={r.label} style={[styles.row, idx === rows.length - 1 && styles.rowLast]}>
+          <View
+            key={r.label}
+            style={[styles.row, idx === rows.length - 1 && styles.rowLast]}
+          >
             <Text style={styles.label}>{r.label}</Text>
             <Text style={styles.value}>{r.value}</Text>
           </View>

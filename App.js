@@ -15,7 +15,7 @@ import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 
 /* Firebase */
-import { onAuthStateChanged } from "firebase/auth";
+import { onIdTokenChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import { getUserRole } from "./services/authService";
 
@@ -85,27 +85,42 @@ const linking = {
 
 export default function App() {
   const [initializing, setInitializing] = useState(true);
-  const [user, setUser] = useState(null); // null | { ...firebaseUser, role?: 'owner'|'provider'|null, needsVerification?: boolean }
+
+  // null | { ...firebaseUser, role?: 'owner'|'provider'|null, needsVerification?: boolean }
+  const [user, setUser] = useState(null);
 
   // Auth state + email verification + rolle
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let cancelled = false;
+
+    const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
       try {
         if (!firebaseUser) {
-          setUser(null);
+          if (!cancelled) setUser(null);
           return;
         }
+
+        // Refresh user object (sikrer emailVerified er opdateret)
         await firebaseUser.reload();
 
         const providerId =
           firebaseUser.providerData?.[0]?.providerId || "password";
+
+        // Kun password-brugere skal verificere email
         const needsVerification =
           providerId === "password" && firebaseUser.emailVerified !== true;
 
         if (needsVerification) {
-          setUser({ ...firebaseUser, role: null, needsVerification: true });
-        } else {
-          const role = await getUserRole(firebaseUser.uid);
+          if (!cancelled) {
+            setUser({ ...firebaseUser, role: null, needsVerification: true });
+          }
+          return;
+        }
+
+        // Hvis verified / ikke-password: hent rolle fra Firestore
+        const role = await getUserRole(firebaseUser.uid);
+
+        if (!cancelled) {
           setUser({
             ...firebaseUser,
             role: role || null,
@@ -114,12 +129,18 @@ export default function App() {
         }
       } catch (err) {
         console.error("Auth bootstrap fejl:", err);
-        setUser(firebaseUser ? { ...firebaseUser, role: null } : null);
+        if (!cancelled) {
+          setUser(firebaseUser ? { ...firebaseUser, role: null } : null);
+        }
       } finally {
-        setInitializing(false);
+        if (!cancelled) setInitializing(false);
       }
     });
-    return unsubscribe;
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, []);
 
   // Notifikationer: kanal, permissions, tap-listener

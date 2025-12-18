@@ -1,5 +1,5 @@
 // components/shared/VerifyEmailScreen.js
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,12 +9,38 @@ import {
   SafeAreaView,
 } from "react-native";
 import { auth } from "../../firebase";
-import { sendEmailVerification, reload, signOut } from "firebase/auth";
+import {
+  sendEmailVerification,
+  reload,
+  signOut,
+  onIdTokenChanged,
+} from "firebase/auth";
 import styles from "../../styles/shared/verifyEmailStyles";
 
 export default function VerifyEmailScreen() {
   const [busy, setBusy] = useState(false);
-  const email = useMemo(() => auth.currentUser?.email ?? "", [auth.currentUser]);
+  const [email, setEmail] = useState(auth.currentUser?.email ?? "");
+  const [isVerified, setIsVerified] = useState(!!auth.currentUser?.emailVerified);
+
+  // Undgå at spamme Alert hvis listener trigges flere gange
+  const alertedRef = useRef(false);
+
+  useEffect(() => {
+    // Denne listener trigges når ID token ændrer sig (fx efter getIdToken(true))
+    const unsub = onIdTokenChanged(auth, (user) => {
+      setEmail(user?.email ?? "");
+      const verified = !!user?.emailVerified;
+      setIsVerified(verified);
+
+      if (verified && !alertedRef.current) {
+        alertedRef.current = true;
+        Alert.alert("Tak!", "Din e-mail er bekræftet – du sendes videre.");
+        // App.js bør nu automatisk skifte væk fra denne skærm
+      }
+    });
+
+    return unsub;
+  }, []);
 
   const resend = async () => {
     try {
@@ -33,12 +59,26 @@ export default function VerifyEmailScreen() {
     try {
       setBusy(true);
       if (!auth.currentUser) throw new Error("Ikke logget ind.");
+
+      // 1) Opdater auth.currentUser fra serveren
       await reload(auth.currentUser);
+
       if (auth.currentUser.emailVerified) {
-        Alert.alert("Tak!", "Din e-mail er bekræftet – du sendes videre.");
-        // App.js skifter automatisk væk herfra, når auth-brugeren er opdateret
+        // 2) Tving token-refresh så onIdTokenChanged kan fange ændringen
+        await auth.currentUser.getIdToken(true);
+
+        setIsVerified(true);
+
+        // Alert vises også via listener, men vi viser den her for respons med det samme
+        if (!alertedRef.current) {
+          alertedRef.current = true;
+          Alert.alert("Tak!", "Din e-mail er bekræftet – du sendes videre.");
+        }
       } else {
-        Alert.alert("Ikke bekræftet endnu", "Klik på linket i mailen og prøv igen.");
+        Alert.alert(
+          "Ikke bekræftet endnu",
+          "Klik på linket i mailen og prøv igen."
+        );
       }
     } catch (e) {
       Alert.alert("Fejl", e?.message || String(e));
@@ -58,6 +98,11 @@ export default function VerifyEmailScreen() {
     }
   };
 
+  const helperText = useMemo(() => {
+    if (isVerified) return "Din konto er aktiv. Du sendes videre…";
+    return "Åbn mailen og klik på linket for at aktivere din konto.";
+  }, [isVerified]);
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
@@ -74,17 +119,16 @@ export default function VerifyEmailScreen() {
               <Text style={styles.subtitleBold}>{email}</Text>.
             </Text>
           )}
-          <Text style={styles.helper}>
-            Åbn mailen og klik på linket for at aktivere din konto.
-          </Text>
+
+          <Text style={styles.helper}>{helperText}</Text>
         </View>
 
         <View style={styles.actions}>
           <TouchableOpacity
             onPress={resend}
-            disabled={busy}
+            disabled={busy || isVerified}
             activeOpacity={0.9}
-            style={[styles.buttonPrimary, busy && styles.buttonDisabled]}
+            style={[styles.buttonPrimary, (busy || isVerified) && styles.buttonDisabled]}
           >
             <Text style={styles.buttonPrimaryText}>Send verifikationsmail igen</Text>
           </TouchableOpacity>
